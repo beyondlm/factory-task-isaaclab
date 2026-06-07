@@ -1,0 +1,44 @@
+{
+    "state": {
+        "franka_joint_pos": {
+            "original_key": "observation.state",
+            "start": 0,
+            "end": 7,
+            "dtype": "float32"
+        },
+        "franka_gripper_width": {
+            "original_key": "observation.state",
+            "start": 7,
+            "end": 8,
+            "dtype": "float32"
+        }
+    },
+    "action": {
+        "franka_joint_pos": {
+            "start": 0,
+            "end": 7,
+            "dtype": "float32"
+        },
+        "franka_gripper_width": {
+            "start": 7,
+            "end": 8,
+            "dtype": "float32"
+        }
+    },
+    "video": {
+        "wrist_camera": {
+            "original_key": "observation.images.wrist_camera"
+        },
+        "table_camera": {
+            "original_key": "observation.images.table_camera"
+        }
+    },
+    "annotation": {
+        "human.action.task_description": {
+            "original_key": "annotation.human.action.task_description"
+        },
+        "human.validity": {
+            "original_key": "annotation.human.action.valid"
+        }
+    }
+}
