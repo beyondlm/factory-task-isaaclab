@@ -37,6 +37,24 @@ source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/c
 source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/mdp/terminations.py
 ```
 
+## Path Variables
+
+The commands below use customer-provided paths. Set them for your machine before running the snippets:
+
+```bash
+export WORKSPACE=/path/to/workspace
+export ISAACLAB=/path/to/IsaacLab
+export GROOT=/path/to/Isaac-GR00T
+export LEROBOT=/path/to/lerobot
+export DATA_ROOT=/path/to/data
+export CHECKPOINT_ROOT=/path/to/checkpoints
+export LOCAL_GROOT_WORKDIR=/path/to/local/gr00t_workdir
+export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
+```
+
+`FRANKA_SORTING_ASSET_DIR` should contain the factory Franka, belt, box, and bin USD files used by
+`joint_pos_env_cfg.py`.
+
 ## Optimized Task Setup
 
 Scene and control changes:
@@ -85,7 +103,7 @@ both_boxes_placed_a_into_c_b_into_d(...)
 Keyboard teleop:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 
 ./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
@@ -98,7 +116,7 @@ conda activate isaaclab3_beta
 SpaceMouse teleop:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 
 ./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
@@ -150,7 +168,7 @@ Camera-enabled teleop:
 Current record command:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 
 ./isaaclab.sh -p scripts/tools/record_demos.py \
@@ -208,7 +226,7 @@ converted LeRobot frames: 60432
 Replay low-dimensional demos:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 
 ./isaaclab.sh -p scripts/tools/replay_demos.py \
@@ -229,7 +247,7 @@ scripts/benchmarks/gr00t/franka/replay_demos_with_camera.py
 Generate full replay videos:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 
 ./isaaclab.sh -p scripts/benchmarks/gr00t/franka/replay_demos_with_camera.py \
@@ -359,7 +377,7 @@ Add the data config entry to Isaac-GR00T before training:
 Install the teleoperation submodule before running `teleop_se3_agent.py`:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 ./isaaclab.sh -i teleop
 ```
@@ -376,6 +394,67 @@ Useful conda envs:
 isaaclab3_beta  -> IsaacLab replay, recording, conversion smoke tests
 lerobot_v040    -> LeRobot v0.4.0 target environment for later GR00T/LeRobot work
 ```
+
+## LeRobot V2 Setup
+
+This pipeline writes GR00T-compatible LeRobot v2 datasets. Use the LeRobot package version that matches the GR00T data
+pipeline. The current setup uses the Hugging Face LeRobot repo pinned to `v0.4.0`, with conda env name
+`lerobot_v040`.
+
+Create the environment:
+
+```bash
+conda create -n lerobot_v040 python=3.10 -y
+conda activate lerobot_v040
+python -m pip install --upgrade pip
+```
+
+Clone or update LeRobot:
+
+```bash
+mkdir -p $WORKSPACE/projects
+cd "$WORKSPACE"/projects
+
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+git fetch --tags
+git checkout v0.4.0
+```
+
+Install LeRobot and the data conversion dependencies:
+
+```bash
+conda activate lerobot_v040
+cd "$LEROBOT"
+
+python -m pip install -e .
+python -m pip install h5py pandas pyarrow tqdm "imageio[ffmpeg]"
+```
+
+Verify:
+
+```bash
+conda activate lerobot_v040
+cd "$LEROBOT"
+
+git describe --tags --always
+python -c "import lerobot; print(lerobot.__file__)"
+python -c "import h5py, pandas, pyarrow, tqdm; print('LeRobot v2 conversion deps OK')"
+```
+
+Expected tag:
+
+```text
+v0.4.0
+```
+
+Notes:
+
+- LeRobot v2 is the dataset layout written under `datasets/dataset_sorting_105/lerobot_task_space` and
+  `datasets/dataset_sorting_105/lerobot_joint_space`.
+- The Franka converters are self-contained and can run from `isaaclab3_beta`, but keeping `lerobot_v040` available is
+  useful for checking LeRobot data and later GR00T data transfer workflows.
+- Keep video files as MP4 in the LeRobot v2 dataset. GIFs are only for README/demo visualization.
 
 The converter is self-contained and does not import IsaacLab, but it needs:
 
@@ -416,7 +495,7 @@ shape  = 8
 Convert with replay videos:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 conda activate isaaclab3_beta
 
 python scripts/benchmarks/gr00t/franka/convert_hdf5_to_lerobot_joint_space.py \
@@ -462,10 +541,10 @@ The training dataset factory can generate the dataset-side files automatically o
 Task-space stats:
 
 ```bash
-cd /home/npnsa/workspace/jeff/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/datasets/dataset_sorting_105/lerobot_task_space
-CONFIG=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/scripts/benchmarks/gr00t/franka/franka_modality_config.py
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 \
 uv run python gr00t/data/stats.py \
@@ -477,10 +556,10 @@ uv run python gr00t/data/stats.py \
 Joint-space stats:
 
 ```bash
-cd /home/npnsa/workspace/jeff/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/datasets/dataset_sorting_105/lerobot_joint_space
-CONFIG=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 \
 uv run python gr00t/data/stats.py \
@@ -509,14 +588,14 @@ scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py
 On BREV, the config may still be copied to the old example path:
 
 ```text
-/home/ubuntu/workspace/Isaac-GR00T/examples/franka_modality_config.py
-/home/ubuntu/workspace/Isaac-GR00T/examples/franka_joint_modality_config.py
+$GROOT/examples/franka_modality_config.py
+$GROOT/examples/franka_joint_modality_config.py
 ```
 
 If unsure, find it:
 
 ```bash
-find /home/ubuntu/workspace -name "franka_joint_modality_config.py" -type f
+find $REMOTE_WORKSPACE -name "franka_joint_modality_config.py" -type f
 ```
 
 ## BREV Data Copy
@@ -524,23 +603,23 @@ find /home/ubuntu/workspace -name "franka_joint_modality_config.py" -type f
 Copy local LeRobot task-space data to BREV:
 
 ```bash
-LOCAL_DATA=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/datasets/dataset_sorting_105/lerobot_task_space
+LOCAL_DATA="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
 
-brev copy "$LOCAL_DATA" agi-test:/home/ubuntu/workspace/data/franka_sorting_105
+brev copy "$LOCAL_DATA" agi-test:$DATA_ROOT/franka_sorting_105
 ```
 
 Copy local LeRobot joint-space data to BREV:
 
 ```bash
-LOCAL_DATA=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/datasets/dataset_sorting_105/lerobot_joint_space
+LOCAL_DATA="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
 
-brev copy "$LOCAL_DATA" agi-test:/home/ubuntu/workspace/data/franka_sorting_105
+brev copy "$LOCAL_DATA" agi-test:$DATA_ROOT/franka_sorting_105
 ```
 
 Check dataset on BREV:
 
 ```bash
-DATASET=/home/ubuntu/workspace/data/franka_sorting_105/lerobot_joint_space
+DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
 
 du -sh "$DATASET"
 find "$DATASET/data" -type f -name "*.parquet" | wc -l
@@ -553,10 +632,10 @@ ls "$DATASET/meta"
 Task-space 20k-step H200 command:
 
 ```bash
-cd /home/ubuntu/workspace/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/ubuntu/workspace/data/franka_sorting_105/lerobot_task_space
-CONFIG=/home/ubuntu/workspace/Isaac-GR00T/examples/franka_modality_config.py
+DATASET="$DATA_ROOT/franka_sorting_105/lerobot_task_space"
+CONFIG="$GROOT/examples/franka_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/experiment/launch_finetune.py \
@@ -565,7 +644,7 @@ uv run python gr00t/experiment/launch_finetune.py \
   --embodiment-tag NEW_EMBODIMENT \
   --modality-config-path "$CONFIG" \
   --num-gpus 1 \
-  --output-dir /home/ubuntu/workspace/checkpoints/franka_gr00t_bs256_20000 \
+  --output-dir "$CHECKPOINT_ROOT/franka_gr00t_bs256_20000" \
   --save-total-limit 3 \
   --save-steps 5000 \
   --max-steps 20000 \
@@ -577,10 +656,10 @@ uv run python gr00t/experiment/launch_finetune.py \
 Joint-space 20k-step H200 command:
 
 ```bash
-cd /home/ubuntu/workspace/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/ubuntu/workspace/data/franka_sorting_105/lerobot_joint_space
-CONFIG=/home/ubuntu/workspace/Isaac-GR00T/examples/franka_joint_modality_config.py
+DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
+CONFIG="$GROOT/examples/franka_joint_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/experiment/launch_finetune.py \
@@ -589,7 +668,7 @@ uv run python gr00t/experiment/launch_finetune.py \
   --embodiment-tag NEW_EMBODIMENT \
   --modality-config-path "$CONFIG" \
   --num-gpus 1 \
-  --output-dir /home/ubuntu/workspace/checkpoints/franka_joint_gr00t_bs256_20000 \
+  --output-dir "$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000" \
   --save-total-limit 3 \
   --save-steps 5000 \
   --max-steps 20000 \
@@ -601,12 +680,12 @@ uv run python gr00t/experiment/launch_finetune.py \
 True resume from `checkpoint-10000` to `checkpoint-20000`:
 
 ```bash
-cd /home/ubuntu/workspace/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/ubuntu/workspace/data/franka_sorting_105/lerobot_joint_space
-CONFIG=/home/ubuntu/workspace/Isaac-GR00T/examples/franka_joint_modality_config.py
-SRC=/home/ubuntu/workspace/checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000
-OUT=/home/ubuntu/workspace/checkpoints/franka_joint_gr00t_resume_10000_to_20000
+DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
+CONFIG="$GROOT/examples/franka_joint_modality_config.py"
+SRC="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+OUT="$CHECKPOINT_ROOT/franka_joint_gr00t_resume_10000_to_20000"
 
 mkdir -p "$OUT"
 cp -al "$SRC" "$OUT/checkpoint-10000"
@@ -669,8 +748,8 @@ training_args.bin
 Copy joint checkpoint 10000 from BREV to local host:
 
 ```bash
-REMOTE_CKPT=/home/ubuntu/workspace/checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000
-LOCAL_CKPT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000
+REMOTE_CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+LOCAL_CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 
 mkdir -p "$LOCAL_CKPT"
 for FILE in \
@@ -704,11 +783,11 @@ If `safetensors_rust.SafetensorError: incomplete metadata` appears, the safetens
 Task-space checkpoint open loop:
 
 ```bash
-cd /home/npnsa/workspace/jeff/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/datasets/dataset_sorting_105/lerobot_task_space
-CKPT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000
-OUT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/open_loop_franka_eef_10000_traj0.jpeg
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
+CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
+OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_eef_10000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -725,11 +804,11 @@ uv run python gr00t/eval/open_loop_eval.py \
 Joint-space checkpoint open loop:
 
 ```bash
-cd /home/npnsa/workspace/jeff/Isaac-GR00T
+cd "$GROOT"
 
-DATASET=/home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab/datasets/dataset_sorting_105/lerobot_joint_space
-CKPT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000
-OUT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/open_loop_franka_joint_10000_traj0.jpeg
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
+CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_10000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -748,9 +827,9 @@ uv run python gr00t/eval/open_loop_eval.py \
 Server for task-space checkpoint:
 
 ```bash
-cd /home/npnsa/workspace/jeff/Isaac-GR00T
+cd "$GROOT"
 
-CKPT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000
+CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -764,7 +843,7 @@ uv run python gr00t/eval/run_gr00t_server.py \
 Client for task-space checkpoint:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
 conda activate isaaclab3_beta
@@ -784,9 +863,9 @@ conda activate isaaclab3_beta
 Server for joint-space checkpoint:
 
 ```bash
-cd /home/npnsa/workspace/jeff/Isaac-GR00T
+cd "$GROOT"
 
-CKPT=/mnt/data-10T/workspace/workspace/jeff/tmp_gr00t/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000
+CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -800,7 +879,7 @@ uv run python gr00t/eval/run_gr00t_server.py \
 Client for joint-space checkpoint:
 
 ```bash
-cd /home/npnsa/workspace/jeff/projects/isaaclab_3_beta/IsaacLab
+cd "$ISAACLAB"
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
 conda activate isaaclab3_beta

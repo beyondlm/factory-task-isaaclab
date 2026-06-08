@@ -38,7 +38,9 @@ from isaaclab_tasks.manager_based.manipulation.stack import mdp as stack_mdp
 from isaaclab_tasks.manager_based.manipulation.stack.mdp import franka_stack_events
 
 
-SORTING_ASSET_DATA_DIR = Path("/home/npnsa/workspace/jeff/customer/jd")
+# Customers can point this task at their own USD asset root without editing code:
+#   export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
+SORTING_ASSET_DATA_DIR = Path(os.getenv("FRANKA_SORTING_ASSET_DIR", "datasets/franka_sorting_assets")).expanduser()
 
 SORTING_SCENE_SCALE = 0.6
 SORTING_Z_OFFSET = 0.6
