@@ -511,7 +511,7 @@ Default output:
 datasets/dataset_sorting_105/lerobot_joint_space
 ```
 
-Observed BREV joint-space sanity check:
+Joint-space sanity check:
 
 ```text
 dataset size: about 510M
@@ -585,57 +585,15 @@ scripts/benchmarks/gr00t/franka/franka_modality_config.py
 scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py
 ```
 
-On BREV, the config may still be copied to the old example path:
+## GR00T Training
 
-```text
-$GROOT/examples/franka_modality_config.py
-$GROOT/examples/franka_joint_modality_config.py
-```
-
-If unsure, find it:
-
-```bash
-find $REMOTE_WORKSPACE -name "franka_joint_modality_config.py" -type f
-```
-
-## BREV Data Copy
-
-Copy local LeRobot task-space data to BREV:
-
-```bash
-LOCAL_DATA="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
-
-brev copy "$LOCAL_DATA" agi-test:$DATA_ROOT/franka_sorting_105
-```
-
-Copy local LeRobot joint-space data to BREV:
-
-```bash
-LOCAL_DATA="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
-
-brev copy "$LOCAL_DATA" agi-test:$DATA_ROOT/franka_sorting_105
-```
-
-Check dataset on BREV:
-
-```bash
-DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
-
-du -sh "$DATASET"
-find "$DATASET/data" -type f -name "*.parquet" | wc -l
-find "$DATASET/videos" -type f -name "*.mp4" | wc -l
-ls "$DATASET/meta"
-```
-
-## BREV Training
-
-Task-space 20k-step H200 command:
+Task-space 20k-step command:
 
 ```bash
 cd "$GROOT"
 
-DATASET="$DATA_ROOT/franka_sorting_105/lerobot_task_space"
-CONFIG="$GROOT/examples/franka_modality_config.py"
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/experiment/launch_finetune.py \
@@ -653,13 +611,13 @@ uv run python gr00t/experiment/launch_finetune.py \
   --color-jitter-params brightness 0.3 contrast 0.4 saturation 0.5 hue 0.08
 ```
 
-Joint-space 20k-step H200 command:
+Joint-space 20k-step command:
 
 ```bash
 cd "$GROOT"
 
-DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
-CONFIG="$GROOT/examples/franka_joint_modality_config.py"
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/experiment/launch_finetune.py \
@@ -682,8 +640,8 @@ True resume from `checkpoint-10000` to `checkpoint-20000`:
 ```bash
 cd "$GROOT"
 
-DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
-CONFIG="$GROOT/examples/franka_joint_modality_config.py"
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py"
 SRC="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 OUT="$CHECKPOINT_ROOT/franka_joint_gr00t_resume_10000_to_20000"
 
@@ -745,27 +703,6 @@ trainer_state.json
 training_args.bin
 ```
 
-Copy joint checkpoint 10000 from BREV to local host:
-
-```bash
-REMOTE_CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
-LOCAL_CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
-
-mkdir -p "$LOCAL_CKPT"
-for FILE in \
-  config.json \
-  embodiment_id.json \
-  processor_config.json \
-  statistics.json \
-  model.safetensors.index.json \
-  model-00001-of-00003.safetensors \
-  model-00002-of-00003.safetensors \
-  model-00003-of-00003.safetensors
-do
-  brev copy agi-test:"$REMOTE_CKPT/$FILE" "$LOCAL_CKPT/$FILE"
-done
-```
-
 Expected joint checkpoint 10000 inference file sizes:
 
 ```text
@@ -786,7 +723,7 @@ Task-space checkpoint open loop:
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_eef_10000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
@@ -807,7 +744,7 @@ Joint-space checkpoint open loop:
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_10000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
@@ -829,7 +766,7 @@ Server for task-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -865,7 +802,7 @@ Server for joint-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -941,42 +878,3 @@ Current joint-space client safeguards:
 ```
 
 The joint-space policy may need more training than task-space EEF because it must learn wrist orientation and IK-like behavior from the joint trajectory.
-
-## H20 Training Notes
-
-On the 8x H20 host, topology showed GPU-GPU `NV18`, so topology was not the obvious bottleneck. Observed speed was still much slower than the single H200 run:
-
-```text
-single H200: about 10000 steps in 4 hours
-single H20: about 3.9 sec/iter in a short test
-multi H20: about 5-8 sec/iter in observed runs
-```
-
-The logs showed shard caching waits such as:
-
-```text
-Wait for shard ... in 45-63 seconds
-Caching shard...
-```
-
-This suggests data/shard preprocessing can bottleneck H20 multi-GPU runs. For this small dataset, single H200 was the best observed setup. If using H20, test with more dataloader workers and more shards per epoch before committing to a long run:
-
-```bash
---dataloader-num-workers 8
---num-shards-per-epoch 580
-```
-
-For multi-GPU, keep these values consistent:
-
-```text
-CUDA_VISIBLE_DEVICES count == torchrun --nproc_per_node == --num-gpus
-```
-
-Example:
-
-```bash
-CUDA_VISIBLE_DEVICES=0,1,2,3 \
-uv run torchrun --nproc_per_node=4 --master_port=29500 \
-  gr00t/experiment/launch_finetune.py \
-  --num-gpus 4
-```

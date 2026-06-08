@@ -150,7 +150,7 @@ Start the GR00T server with an EEF/task-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
 
 UV_LINK_MODE=copy NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \

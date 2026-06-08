@@ -117,16 +117,9 @@ Optional one-episode video smoke test:
   --viz none
 ```
 
-## BREV GR00T Training Reference
+## GR00T Training Reference
 
-BREV dataset path:
-
-```bash
-DATASET="$DATA_ROOT/franka_sorting_105/lerobot_task_space"
-CONFIG="$GROOT/examples/franka_modality_config.py"
-```
-
-Dataset sanity check observed on BREV:
+Task-space dataset sanity check:
 
 ```text
 dataset size: 510M
@@ -139,10 +132,13 @@ fps: 30
 robot_type: franka_pick_place_relative_task_space
 ```
 
-20k-step H200 run command:
+20k-step task-space run command:
 
 ```bash
 cd "$GROOT"
+
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_modality_config.py"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 uv run python gr00t/experiment/launch_finetune.py \
   --base-model-path nvidia/GR00T-N1.7-3B \
@@ -159,23 +155,8 @@ NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 uv run python gr00t/experiment
   --color-jitter-params brightness 0.3 contrast 0.4 saturation 0.5 hue 0.08
 ```
 
-Observed BREV GPU snapshot during the batch-size 256 run:
-
-```text
-GPU: NVIDIA H200
-Driver: 580.126.09
-CUDA: 13.0
-Total GPU memory: 143771 MiB
-Used GPU memory: 91775 MiB
-Training process memory: 91748 MiB
-GPU temperature: 38 C
-Power: 122 W / 700 W
-GPU utilization at snapshot: 0%
-```
-
 Notes:
 
-- Batch size 256 fits in the observed H200 memory snapshot, using about 91.8 GiB of 143.8 GiB.
 - `--color-jitter-params` must use space-separated key/value pairs, not `brightness=0.3` syntax.
 - If Hugging Face access fails, verify both `nvidia/GR00T-N1.7-3B` and `nvidia/Cosmos-Reason2-2B`.
 
@@ -215,15 +196,15 @@ uv run python gr00t/data/stats.py \
   --modality-config-path "$CONFIG"
 ```
 
-## BREV Joint-Space Training
+## Joint-Space Training
 
 Dataset/config:
 
 ```bash
 cd "$GROOT"
 
-DATASET="$DATA_ROOT/franka_sorting_105/lerobot_joint_space"
-CONFIG="$GROOT/examples/franka_joint_modality_config.py"
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py"
 ```
 
 Start or rerun 20k-step joint-space training:
@@ -280,7 +261,7 @@ Task-space checkpoint:
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_eef_10000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
@@ -301,7 +282,7 @@ Joint-space checkpoint:
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_10000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
@@ -323,7 +304,7 @@ Start GR00T server for task-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -359,7 +340,7 @@ Start GR00T server for joint-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$LOCAL_GROOT_WORKDIR/brev_checkpoints/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
