@@ -1,5 +1,10 @@
 # Factory Task IsaacLab Overlay
 
+This repo is intended for IsaacLab factory-task development and GR00T N-series policy evaluation. It provides task
+overlays, LeRobot conversion utilities, and both open-loop and closed-loop evaluation workflows for GR00T N.x models.
+
+Current validated GR00T version: **GR00T N1.7**.
+
 This repository is an IsaacLab 3 Beta overlay focused on factory robot learning scenarios.
 
 Install IsaacLab 3 Beta first:
@@ -41,13 +46,23 @@ evaluation.
 GR00T baseline:
 [NVIDIA Isaac-GR00T N1.7 release](https://github.com/NVIDIA/Isaac-GR00T/tree/n1.7-release)
 
-Current EEF/task-space closed-loop benchmark:
+Current Franka sorting closed-loop benchmark:
 
-```text
-Franka sorting EEF policy: 65% SR
-Model: GR00T N1.7
-Training: 20k steps, global batch size 256
-```
+| Policy action space | GR00T N1.7 modality config | GR00T N1.7 action representation | Training setup | Closed-loop SR | Notes |
+| --- | --- | --- | --- | --- | --- |
+| EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | Same 105-demo dataset source, 10k steps, global batch size 256 | 65% | Uses IsaacLab IK-relative execution. The HDF5 action is already a relative EEF delta, so the GR00T config marks it as `ABSOLUTE + NON_EEF + DEFAULT` to avoid applying another relative EEF transform. |
+| Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | Same 105-demo dataset source, 20k steps, global batch size 256 | 30% | Uses relative joint action processing for arm joints and absolute gripper width. More sensitive to pose variation, contact, and closed-loop drift. |
+
+Modality config files:
+[EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py),
+[Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py).
+
+For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the robot executes absolute EEF poses. It means GR00T should learn the recorded IK-relative delta vector directly as a normal continuous action, while IsaacLab's IK-relative controller applies that delta during rollout.
+
+## Future Plan
+
+- Add another 100 Franka sorting episodes with broader box pose and task-progress coverage.
+- Add DAgger evaluation to reduce closed-loop drift and collect correction data.
 
 ## Main Links
 

@@ -177,8 +177,7 @@ conda activate isaaclab3_beta
   --language-instruction "Pick up the labeled box and place it into the blue bin. Pick up the unlabeled box and place it into the black bin." \
   --num-total-experiments 10 \
   --max-inference-steps 62 \
-  --num-feedback-actions 16 \
-  --num-success-steps 30
+  --num-feedback-actions 16
 ```
 
 Add `--headless` to the client command for no GUI.

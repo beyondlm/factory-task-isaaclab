@@ -793,8 +793,7 @@ conda activate isaaclab3_beta
   --language-instruction "Pick up the labeled box and place it into the blue bin. Pick up the unlabeled box and place it into the black bin." \
   --num-total-experiments 10 \
   --max-inference-steps 62 \
-  --num-feedback-actions 16 \
-  --num-success-steps 30
+  --num-feedback-actions 16
 ```
 
 Server for joint-space checkpoint:
@@ -830,8 +829,6 @@ conda activate isaaclab3_beta
   --num-total-experiments 20 \
   --max-inference-steps 62 \
   --num-feedback-actions 8 \
-  --num-success-steps 30 \
-  --max-joint-step 0.035 \
   --debug \
   --pause-on-error
 ```
@@ -870,11 +867,6 @@ franka_gripper_width
 
 If debug output shows EEF action keys, the GR00T server is using the wrong checkpoint.
 
-Current joint-space client safeguards:
-
-```text
---max-joint-step 0.035
---num-feedback-actions 8
-```
+The joint-space client sends decoded GR00T joint targets directly to the IsaacLab joint-position action term.
 
 The joint-space policy may need more training than task-space EEF because it must learn wrist orientation and IK-like behavior from the joint trajectory.

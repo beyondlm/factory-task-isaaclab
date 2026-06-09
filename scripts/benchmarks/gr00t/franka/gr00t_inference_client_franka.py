@@ -60,7 +60,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-total-experiments", type=int, default=10)
     parser.add_argument("--max-inference-steps", type=int, default=62)
     parser.add_argument("--num-feedback-actions", type=int, default=16)
-    parser.add_argument("--num-success-steps", type=int, default=30)
     parser.add_argument("--camera-names", nargs="+", default=["wrist_camera", "table_camera"])
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=11)
@@ -68,9 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--debug", action="store_true")
     parser.add_argument("--max-pos-delta", type=float, default=0.2)
     parser.add_argument("--max-rot-delta", type=float, default=0.2)
-    parser.add_argument("--max-joint-step", type=float, default=0.05)
     parser.add_argument("--joint-gripper-open-threshold", type=float, default=0.04)
-    parser.add_argument("--no-joint-step-clamp", action="store_true")
     parser.add_argument("--no-binarize-gripper", action="store_true")
     parser.add_argument("--pause-on-error", action="store_true")
     args = parser.parse_args()
@@ -326,20 +323,6 @@ def parse_franka_action(action_dict: dict[str, np.ndarray], args: argparse.Names
     return parse_task_space_action(action_dict, args)
 
 
-def clamp_joint_action_to_current(env, action: torch.Tensor, args: argparse.Namespace) -> torch.Tensor:
-    if args.policy_type != "joint_space" or args.no_joint_step_clamp:
-        return action
-    current_arm_joint_pos, _ = franka_joint_state(env)
-    current_arm_joint_pos = torch.as_tensor(current_arm_joint_pos[0], device=action.device, dtype=action.dtype)
-    clamped_action = action.clone()
-    clamped_action[:7] = torch.clamp(
-        clamped_action[:7],
-        min=current_arm_joint_pos - args.max_joint_step,
-        max=current_arm_joint_pos + args.max_joint_step,
-    )
-    return clamped_action
-
-
 def make_env(args: argparse.Namespace):
     env_cfg = parse_env_cfg(args.task, device=args.device, num_envs=1)
     env_cfg.recorders = {}
@@ -381,7 +364,6 @@ def run_closed_loop(args: argparse.Namespace) -> None:
             for _ in range(getattr(env.unwrapped.cfg, "num_rerenders_on_reset", 0)):
                 env.sim.render()
 
-            success_step_count = 0
             experiment_success = False
             frame_count = 0
 
@@ -399,17 +381,12 @@ def run_closed_loop(args: argparse.Namespace) -> None:
                     )
 
                 for action in action_chunk:
-                    action = clamp_joint_action_to_current(env, action, args)
                     obs, _, _, _, _ = env.step(action.reshape(1, -1))
                     frame_count += 1
 
                     if success_term is not None and bool(success_term.func(env, **success_term.params)[0]):
-                        success_step_count += 1
-                        if success_step_count >= args.num_success_steps:
-                            experiment_success = True
-                            break
-                    else:
-                        success_step_count = 0
+                        experiment_success = True
+                        break
 
                 if experiment_success:
                     successful_experiments += 1

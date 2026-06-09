@@ -331,8 +331,7 @@ conda activate isaaclab3_beta
   --language-instruction "Pick up the labeled box and place it into the blue bin. Pick up the unlabeled box and place it into the black bin." \
   --num-total-experiments 10 \
   --max-inference-steps 62 \
-  --num-feedback-actions 16 \
-  --num-success-steps 30
+  --num-feedback-actions 16
 ```
 
 Start GR00T server for joint-space checkpoint:
@@ -368,8 +367,6 @@ conda activate isaaclab3_beta
   --num-total-experiments 20 \
   --max-inference-steps 62 \
   --num-feedback-actions 8 \
-  --num-success-steps 30 \
-  --max-joint-step 0.035 \
   --debug \
   --pause-on-error
 ```
