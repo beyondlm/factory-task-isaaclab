@@ -66,23 +66,16 @@ For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the ro
 
 ## Main Links
 
-Franka benchmark details:
+Franka benchmark details and command reference:
 
-[Franka GR00T benchmark README](scripts/benchmarks/gr00t/franka/README.md)
-
-Franka command reference:
-
-[Franka GR00T command reference](scripts/benchmarks/gr00t/franka/franka_manipulation_gr00t_commands.md)
-
-Full Franka pipeline notes:
-
-[Franka manipulation pick-and-place guide](docs/source/how-to/franka_manipulation_pick_place_notes.md)
+[Franka GR00T command guide](scripts/benchmarks/gr00t/franka/franka_manipulation_gr00t_commands.md)
 
 ## Included Overlay Paths
 
 ```text
-docs/source/how-to/franka_manipulation_pick_place_notes.md
 docs/source/_static/how-to/franka_sorting_closed_loop.gif
+docs/source/_static/how-to/franka_eef_open_loop_5000_traj0.jpeg
+docs/source/_static/how-to/franka_joint_open_loop_20000_traj0.jpeg
 scripts/benchmarks/gr00t/franka/
 source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/config/franka/
 source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/mdp/

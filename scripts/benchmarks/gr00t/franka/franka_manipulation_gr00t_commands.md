@@ -1,8 +1,18 @@
-# Franka Manipulation GR00T Commands
+# Franka Factory Sorting GR00T Benchmark And Commands
+
+This guide is the Franka benchmark and command reference for the IsaacLab 3 Beta factory sorting overlay.
+It covers demo replay, LeRobot v2 conversion, GR00T training data preparation, open-loop evaluation, and closed-loop
+GR00T server/client tests.
+
+The Franka policy pipeline is based on
+[NVIDIA Isaac-GR00T N1.7 release](https://github.com/NVIDIA/Isaac-GR00T/tree/n1.7-release).
+
+## Path Variables
 
 Set customer-specific paths first:
 
 ```bash
+export WORKSPACE=/path/to/workspace
 export ISAACLAB=/path/to/IsaacLab
 export GROOT=/path/to/Isaac-GR00T
 export LEROBOT=/path/to/lerobot
@@ -11,6 +21,213 @@ export CHECKPOINT_ROOT=/path/to/checkpoints
 export LOCAL_GROOT_WORKDIR=/path/to/local/gr00t_workdir
 export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
 ```
+
+`FRANKA_SORTING_ASSET_DIR` should point to the USD asset root for the factory Franka, belt, boxes, and bins.
+
+## Benchmark Scope
+
+Main teleoperation task:
+
+```text
+Isaac-Pick-Place-Franka-IK-Rel-v0
+```
+
+Replay camera task:
+
+```text
+Isaac-Pick-Place-Franka-IK-Rel-Replay-Camera-v0
+```
+
+Joint-position replay camera task:
+
+```text
+Isaac-Pick-Place-Franka-Joint-Position-Replay-Camera-v0
+```
+
+Sorting target mapping:
+
+```text
+object_a = box_3_label -> blue bin  = sorting_bin_blue
+object_b = box_4_no    -> black bin = black_sorting_bin
+```
+
+Current closed-loop benchmark summary:
+
+| Policy action space | GR00T N1.7 modality config | Training setup | Closed-loop SR | Notes |
+| --- | --- | --- | --- | --- |
+| EEF / IK-relative | [EEF config](franka_modality_config.py) | GR00T N1.7, same 105-demo dataset source, 10k steps, global batch size 256 | 65% | Uses IsaacLab IK-relative execution. The HDF5 action is already a relative EEF delta, so the GR00T config marks it as `ABSOLUTE + NON_EEF + DEFAULT` to avoid applying another relative EEF transform. |
+| Joint space | [Joint config](franka_joint_modality_config.py) | GR00T N1.7, same 105-demo dataset source, 20k steps, global batch size 256 | 30% | Uses relative joint action processing for arm joints and absolute gripper width. More sensitive to pose variation, contact, and closed-loop drift. |
+
+For new reportable numbers, rerun the closed-loop client with a fixed checkpoint, fixed seed/task setup, and
+`--num-total-experiments` set to the desired trial count.
+
+## Task Setup And Success Criteria
+
+Main task files:
+
+```text
+source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/config/franka/joint_pos_env_cfg.py
+source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/config/franka/ik_rel_env_cfg.py
+source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/mdp/terminations.py
+```
+
+Scene and control details:
+
+- Franka is positioned closer to the blue/black bins for easier manipulation.
+- Belt/table scene scale is controlled by `SORTING_SCENE_SCALE` and `SORTING_BELT_SCALE`.
+- Proxy belt/table colliders are sized from the same scene scale.
+- `table_camera` position derives from `_belt_scaled_pos(FRANKA_TABLE_CAM_LOCAL_POS)`, so changing
+  `SORTING_BELT_SCALE` moves the camera consistently.
+- Replay cameras use `CameraCfg.OffsetCfg(..., convention="opengl")`.
+- Wrist camera quaternion is stored in IsaacLab `CameraCfg` order: `(x, y, z, w)`.
+- Viewport camera starts closer to the Franka/bin workspace.
+
+Current Franka teleop/control defaults:
+
+```text
+FRANKA_IK_ACTION_SCALE=1.0
+FRANKA_SPACEMOUSE_POS_SENSITIVITY=0.2
+FRANKA_SPACEMOUSE_ROT_SENSITIVITY=0.2
+FRANKA_KEYBOARD_POS_SENSITIVITY=0.1
+FRANKA_KEYBOARD_ROT_SENSITIVITY=0.1
+```
+
+The success logic waits for a real release/drop into the bins:
+
+- `box_3_label` must be in the blue bin.
+- `box_4_no` must be in the black bin.
+- Success checks both XY distance and a tight bin height threshold.
+- The box root must be low in the bin, with signed height difference gated to roughly `[-0.01, 0.035]` m.
+- `require_gripper_open=True` prevents ending while still holding the object.
+- Both boxes must be dynamically settled with low linear and angular velocity.
+
+Relevant function:
+
+```text
+both_boxes_placed_a_into_c_b_into_d(...)
+```
+
+## Required Local Setup
+
+Install the teleoperation submodule before running `teleop_se3_agent.py`:
+
+```bash
+cd "$ISAACLAB"
+conda activate isaaclab3_beta
+./isaaclab.sh -i teleop
+```
+
+Verify:
+
+```bash
+python -c "import isaaclab_teleop; print(isaaclab_teleop.__file__)"
+```
+
+Useful conda envs:
+
+```text
+isaaclab3_beta  -> IsaacLab replay, recording, conversion smoke tests
+lerobot_v040    -> LeRobot v0.4.0 target environment for later GR00T/LeRobot work
+```
+
+## LeRobot V2 Setup
+
+This pipeline writes GR00T-compatible LeRobot v2 datasets. Use the LeRobot package version that matches the GR00T data
+pipeline. The current setup uses the Hugging Face LeRobot repo pinned to `v0.4.0`, with conda env name
+`lerobot_v040`.
+
+Create the environment:
+
+```bash
+conda create -n lerobot_v040 python=3.10 -y
+conda activate lerobot_v040
+python -m pip install --upgrade pip
+```
+
+Clone or update LeRobot:
+
+```bash
+mkdir -p "$WORKSPACE/projects"
+cd "$WORKSPACE/projects"
+
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+git fetch --tags
+git checkout v0.4.0
+```
+
+Install LeRobot and conversion dependencies:
+
+```bash
+conda activate lerobot_v040
+cd "$LEROBOT"
+
+python -m pip install -e .
+python -m pip install h5py pandas pyarrow tqdm "imageio[ffmpeg]"
+```
+
+Verify:
+
+```bash
+conda activate lerobot_v040
+cd "$LEROBOT"
+
+git describe --tags --always
+python -c "import lerobot; print(lerobot.__file__)"
+python -c "import h5py, pandas, pyarrow, tqdm; print('LeRobot v2 conversion deps OK')"
+```
+
+Expected tag:
+
+```text
+v0.4.0
+```
+
+The Franka converters are self-contained and can run from `isaaclab3_beta`, but keeping `lerobot_v040` available is
+useful for checking LeRobot data and later GR00T data transfer workflows.
+
+## Teleoperation
+
+Keyboard teleop:
+
+```bash
+cd "$ISAACLAB"
+conda activate isaaclab3_beta
+
+./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
+  --task Isaac-Pick-Place-Franka-IK-Rel-v0 \
+  --num_envs 1 \
+  --teleop_device keyboard \
+  --viz kit
+```
+
+SpaceMouse teleop:
+
+```bash
+cd "$ISAACLAB"
+conda activate isaaclab3_beta
+
+./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
+  --task Isaac-Pick-Place-Franka-IK-Rel-v0 \
+  --num_envs 1 \
+  --teleop_device spacemouse \
+  --viz kit
+```
+
+Faster SpaceMouse run:
+
+```bash
+FRANKA_SPACEMOUSE_POS_SENSITIVITY=0.3 \
+FRANKA_SPACEMOUSE_ROT_SENSITIVITY=0.3 \
+FRANKA_IK_ACTION_SCALE=1.0 \
+./isaaclab.sh -p scripts/environments/teleoperation/teleop_se3_agent.py \
+  --task Isaac-Pick-Place-Franka-IK-Rel-v0 \
+  --num_envs 1 \
+  --teleop_device spacemouse \
+  --viz kit
+```
+
+## Demo Recording
 
 Run from the IsaacLab root:
 
@@ -41,6 +258,31 @@ Record 100 longer completed-action demos:
   --num_demos 100 \
   --teleop_device spacemouse \
   --num_success_steps 60
+```
+
+`record_demos.py` creates the HDF5 with write mode, so reusing the same `--dataset_file` overwrites the old file
+instead of appending.
+
+Dataset used in the examples:
+
+```text
+datasets/dataset_sorting_105.hdf5
+```
+
+Recorded HDF5 action format:
+
+```text
+actions: [dx, dy, dz, d_rx, d_ry, d_rz, gripper_cmd]
+```
+
+Replay low-dimensional demos:
+
+```bash
+./isaaclab.sh -p scripts/tools/replay_demos.py \
+  --task Isaac-Pick-Place-Franka-IK-Rel-v0 \
+  --dataset_file ./datasets/dataset_sorting_105.hdf5 \
+  --validate_success_rate \
+  --viz kit
 ```
 
 Generate replay camera videos from the recorded HDF5:
@@ -117,6 +359,68 @@ Optional one-episode video smoke test:
   --viz none
 ```
 
+Generated LeRobot v2 layout:
+
+```text
+meta/info.json
+meta/tasks.jsonl
+meta/episodes.jsonl
+meta/modality.json
+data/chunk-000/episode_000000.parquet
+videos/chunk-000/observation.images.wrist_camera/episode_000000.mp4
+videos/chunk-000/observation.images.table_camera/episode_000000.mp4
+```
+
+## Dataset Statistics
+
+GR00T has two different statistics locations:
+
+```text
+dataset/meta/stats.json
+dataset/meta/relative_stats.json
+checkpoint/statistics.json
+```
+
+`meta/stats.json` and `meta/relative_stats.json` are dataset-side files used by training and open-loop dataset loading.
+`checkpoint/statistics.json` is checkpoint-side normalization used for inference. A checkpoint can be valid even if the
+local dataset copy is missing the two meta files.
+
+Task-space stats:
+
+```bash
+cd "$GROOT"
+
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_modality_config.py"
+
+NO_ALBUMENTATIONS_UPDATE=1 \
+uv run python gr00t/data/stats.py \
+  --dataset-path "$DATASET" \
+  --embodiment-tag NEW_EMBODIMENT \
+  --modality-config-path "$CONFIG"
+```
+
+Joint-space stats:
+
+```bash
+cd "$GROOT"
+
+DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
+CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py"
+
+NO_ALBUMENTATIONS_UPDATE=1 \
+uv run python gr00t/data/stats.py \
+  --dataset-path "$DATASET" \
+  --embodiment-tag NEW_EMBODIMENT \
+  --modality-config-path "$CONFIG"
+```
+
+Verify:
+
+```bash
+ls -lh "$DATASET/meta/stats.json" "$DATASET/meta/relative_stats.json"
+```
+
 ## GR00T Training Reference
 
 Task-space dataset sanity check:
@@ -159,6 +463,11 @@ Notes:
 
 - `--color-jitter-params` must use space-separated key/value pairs, not `brightness=0.3` syntax.
 - If Hugging Face access fails, verify both `nvidia/GR00T-N1.7-3B` and `nvidia/Cosmos-Reason2-2B`.
+- Add this data config entry to Isaac-GR00T before training:
+
+```python
+"franka_pick_place_relative_task_space": FrankaPickPlaceRelativeTaskSpaceDataConfig(),
+```
 
 ## Joint-Space Conversion
 
@@ -181,19 +490,17 @@ Output:
 datasets/dataset_sorting_105/lerobot_joint_space
 ```
 
-Generate missing GR00T dataset statistics:
+Joint-space sanity check:
 
-```bash
-cd "$GROOT"
-
-DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
-CONFIG="$ISAACLAB/scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py"
-
-NO_ALBUMENTATIONS_UPDATE=1 \
-uv run python gr00t/data/stats.py \
-  --dataset-path "$DATASET" \
-  --embodiment-tag NEW_EMBODIMENT \
-  --modality-config-path "$CONFIG"
+```text
+dataset size: about 510M
+parquet files: 105
+mp4 files: 210
+episodes: 105
+frames: 58857
+videos: 210
+fps: 30
+robot_type: franka_pick_place_joint_space
 ```
 
 ## Joint-Space Training
@@ -253,6 +560,34 @@ uv run python gr00t/experiment/launch_finetune.py \
 
 `--base-model-path checkpoint-10000` only loads weights and starts a fresh optimizer from step 0. True resume needs `checkpoint-10000` under `--output-dir`.
 
+## Checkpoint Copy And Verification
+
+Inference-only checkpoint files:
+
+```text
+config.json
+embodiment_id.json
+processor_config.json
+statistics.json
+model.safetensors.index.json
+model-00001-of-00003.safetensors
+model-00002-of-00003.safetensors
+model-00003-of-00003.safetensors
+```
+
+Training resume additionally needs:
+
+```text
+optimizer.pt
+scheduler.pt
+rng_state.pth
+trainer_state.json
+training_args.bin
+```
+
+If `safetensors_rust.SafetensorError: incomplete metadata` appears, the safetensors shard is truncated and must be
+copied again.
+
 ## Open-Loop Evaluation
 
 Task-space checkpoint:
@@ -276,14 +611,18 @@ uv run python gr00t/eval/open_loop_eval.py \
   --save-plot-path "$OUT"
 ```
 
+The 5k-step EEF/task-space GR00T N1.7 checkpoint tracks the IK-relative delta trajectory in open-loop evaluation:
+
+![Franka EEF/task-space open-loop trajectory](../../../../docs/source/_static/how-to/franka_eef_open_loop_5000_traj0.jpeg)
+
 Joint-space checkpoint:
 
 ```bash
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
-CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
-OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_10000_traj0.jpeg"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-20000"
+OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_20000_traj0.jpeg"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -296,6 +635,11 @@ uv run python gr00t/eval/open_loop_eval.py \
   --modality-keys franka_joint_pos franka_gripper_width \
   --save-plot-path "$OUT"
 ```
+
+The 20k-step joint-space GR00T N1.7 checkpoint tracks the held-out demonstration trajectory closely in open-loop
+evaluation:
+
+![Franka joint-space open-loop trajectory](../../../../docs/source/_static/how-to/franka_joint_open_loop_20000_traj0.jpeg)
 
 ## Closed-Loop Evaluation
 
@@ -339,7 +683,7 @@ Start GR00T server for joint-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-20000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -366,9 +710,44 @@ conda activate isaaclab3_beta
   --language-instruction "Pick up the labeled box and place it into the blue bin. Pick up the unlabeled box and place it into the black bin." \
   --num-total-experiments 20 \
   --max-inference-steps 62 \
-  --num-feedback-actions 8 \
-  --debug \
-  --pause-on-error
+  --num-feedback-actions 16
 ```
 
 Add `--headless` to the client command if GUI is not needed.
+
+## Joint-Space Closed-Loop Notes
+
+Franka joint-space closed-loop support is implemented in:
+
+```text
+scripts/benchmarks/gr00t/franka/gr00t_inference_client_franka.py
+source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/config/franka/ik_rel_env_cfg.py
+source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/config/franka/__init__.py
+```
+
+Registered task:
+
+```text
+Isaac-Pick-Place-Franka-Joint-Position-Replay-Camera-v0
+```
+
+The client sends joint-space observation/action keys:
+
+```text
+franka_joint_pos
+franka_gripper_width
+```
+
+If debug output shows EEF action keys, the GR00T server is using the wrong checkpoint. The joint-space client sends
+decoded GR00T joint targets directly to the IsaacLab joint-position action term.
+
+## Troubleshooting
+
+- `ModuleNotFoundError: No module named 'isaaclab_teleop'` means the teleop extension is not installed in the active
+  conda environment. Run `./isaaclab.sh -i teleop`.
+- `module 'omni' has no attribute 'appwindow'` happens when keyboard teleoperation is launched without Kit GUI
+  support. Add `--viz kit`.
+- Long waits such as `Waiting for RtPso async group async compilation` are RTX shader compilation during Kit startup,
+  especially when cameras/rendering are enabled.
+- HDF5 replay/conversion fails on truncated files. A canceled recording may leave a partial HDF5, so prefer a
+  completed dataset file for replay and conversion.
