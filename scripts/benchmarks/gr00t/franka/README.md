@@ -137,6 +137,13 @@ state[t]  = [panda_joint1..panda_joint7, gripper_width] at t
 action[t] = [panda_joint1..panda_joint7, gripper_width] at t + 1
 ```
 
+## Joint-Space Open-Loop Sanity Check
+
+The 20k-step joint-space GR00T N1.7 checkpoint tracks the held-out demonstration trajectory closely in open-loop
+evaluation:
+
+![Franka joint-space open-loop trajectory](../../../../docs/source/_static/how-to/franka_joint_open_loop_20000_traj0.jpeg)
+
 For GR00T training, merge `data_config.py` into Isaac-GR00T's `gr00t/experiment/data_config.py` and add:
 
 ```python
