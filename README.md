@@ -27,6 +27,10 @@ export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
 
 The asset directory should contain the factory Franka, belt, box, and bin USD files referenced by the Franka task config.
 
+![Franka sorting scene preview](docs/source/_static/how-to/franka_sorting_closed_loop_preview.jpg)
+
+Video loading, please wait.
+
 ![Franka sorting closed-loop demo](docs/source/_static/how-to/franka_sorting_closed_loop.gif)
 
 ## Focus
