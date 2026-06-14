@@ -48,17 +48,21 @@ GR00T baseline:
 
 Current Franka sorting closed-loop benchmark:
 
-| Policy action space | GR00T N1.7 modality config | GR00T N1.7 action representation | Training setup | Closed-loop SR | Notes |
-| --- | --- | --- | --- | --- | --- |
-| EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | Same 105-demo dataset source, 10k steps, global batch size 256 | 65% | Uses IsaacLab IK-relative execution. The HDF5 action is already a relative EEF delta, so the GR00T config marks it as `ABSOLUTE + NON_EEF + DEFAULT` to avoid applying another relative EEF transform. |
-| Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | Same 105-demo dataset source, 20k steps, global batch size 256 | 30% | Uses relative joint action processing for arm joints and absolute gripper width. More sensitive to pose variation, contact, and closed-loop drift. |
+The 10k rows use 105 episodes; the 20k rows use 201 episodes.
+
+| Policy action space | GR00T N1.7 modality config | GR00T N1.7 action representation | Training dataset | Training setup | Batch size | Closed-loop SR | Failure notes |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | 105 episodes | 10k steps | 256 | 65% | 20 trials:<br />1: OOD pick failure, 7 times. |
+| EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | 201 episodes | 20k steps | 256 | 100% | 20 trials: no failures. |
+| Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
+| Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
 
 For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the robot executes absolute EEF poses. It means GR00T should learn the recorded IK-relative delta vector directly as a normal continuous action, while IsaacLab's IK-relative controller applies that delta during rollout.
 
 ## Future Plan
 
-- Add another 100 Franka sorting episodes with broader box pose and task-progress coverage.
-- Add DAgger evaluation to reduce closed-loop drift and collect correction data.
+- ☑ Add another 100 Franka sorting episodes with broader box pose and task-progress coverage.
+- ☐ Add DAgger evaluation to reduce closed-loop drift and collect correction data.
 
 ## Main Links
 

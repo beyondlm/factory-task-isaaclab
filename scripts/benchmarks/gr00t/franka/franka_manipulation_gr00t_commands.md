@@ -53,10 +53,14 @@ object_b = box_4_no    -> black bin = black_sorting_bin
 
 Current closed-loop benchmark summary:
 
-| Policy action space | GR00T N1.7 modality config | Training setup | Closed-loop SR | Notes |
-| --- | --- | --- | --- | --- |
-| EEF / IK-relative | [EEF config](franka_modality_config.py) | GR00T N1.7, same 105-demo dataset source, 10k steps, global batch size 256 | 65% | Uses IsaacLab IK-relative execution. The HDF5 action is already a relative EEF delta, so the GR00T config marks it as `ABSOLUTE + NON_EEF + DEFAULT` to avoid applying another relative EEF transform. |
-| Joint space | [Joint config](franka_joint_modality_config.py) | GR00T N1.7, same 105-demo dataset source, 20k steps, global batch size 256 | 30% | Uses relative joint action processing for arm joints and absolute gripper width. More sensitive to pose variation, contact, and closed-loop drift. |
+The 10k rows use 105 episodes; the 20k rows use 201 episodes.
+
+| Policy action space | GR00T N1.7 modality config | Training dataset | Training setup | Batch size | Closed-loop SR | Failure notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| EEF / IK-relative | [EEF config](franka_modality_config.py) | 105 episodes | 10k steps | 256 | 65% | 20 trials:<br />1: OOD pick failure, 7 times. |
+| EEF / IK-relative | [EEF config](franka_modality_config.py) | 201 episodes | 20k steps | 256 | 100% | 20 trials: no failures. |
+| Joint space | [Joint config](franka_joint_modality_config.py) | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
+| Joint space | [Joint config](franka_joint_modality_config.py) | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
 
 For new reportable numbers, rerun the closed-loop client with a fixed checkpoint, fixed seed/task setup, and
 `--num-total-experiments` set to the desired trial count.
