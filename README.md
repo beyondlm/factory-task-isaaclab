@@ -27,11 +27,13 @@ export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
 
 The asset directory should contain the factory Franka, belt, box, and bin USD files referenced by the Franka task config.
 
-![Franka sorting scene preview](docs/source/_static/how-to/franka_sorting_closed_loop_preview.jpg)
+viewport for visualization
 
-Video loading, please wait.
+![Viewport for visualization](docs/source/_static/how-to/penetrate.gif)
 
-![Franka sorting closed-loop demo](docs/source/_static/how-to/franka_sorting_closed_loop.gif)
+training viewport : head and wrist
+
+![Training viewport: head and wrist](docs/source/_static/how-to/head-wrist.gif)
 
 ## Focus
 
@@ -77,7 +79,8 @@ Franka benchmark details and command reference:
 ## Included Overlay Paths
 
 ```text
-docs/source/_static/how-to/franka_sorting_closed_loop.gif
+docs/source/_static/how-to/penetrate.gif
+docs/source/_static/how-to/head-wrist.gif
 docs/source/_static/how-to/franka_eef_open_loop_5000_traj0.jpeg
 docs/source/_static/how-to/franka_joint_open_loop_20000_traj0.jpeg
 scripts/benchmarks/gr00t/franka/
