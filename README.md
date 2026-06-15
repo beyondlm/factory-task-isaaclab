@@ -31,9 +31,9 @@ viewport for visualization
 
 ![Viewport for visualization](docs/source/_static/how-to/penetrate.gif)
 
-training viewport : head and wrist
+training viewport : table(static) and wrist
 
-![Training viewport: head and wrist](docs/source/_static/how-to/head-wrist.gif)
+![Training viewport: table(static) and wrist](docs/source/_static/how-to/head-wrist.gif)
 
 ## Focus
 
