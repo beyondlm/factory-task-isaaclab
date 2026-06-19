@@ -62,12 +62,14 @@ The 10k rows use 105 episodes; the 20k rows use 201 episodes.
 | EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | 201 episodes | 20k steps | 256 | 100% | 20 trials: no failures. |
 | Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
 | Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
+| Joint space + video history | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) with archived `video.delta_indices = [-16, 0]` | `franka_joint_pos`, `franka_gripper_width`; current-state only, two video frames | 201 episodes | 20k steps | 256 | 35% | 20 trials. History-frame video hurt joint-space closed-loop SR, likely because historical robot images conflicted with current-only joint state. |
 
 For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the robot executes absolute EEF poses. It means GR00T should learn the recorded IK-relative delta vector directly as a normal continuous action, while IsaacLab's IK-relative controller applies that delta during rollout.
 
 ## Future Plan
 
 - ☑ Add another 100 Franka sorting episodes with broader box pose and task-progress coverage.
+- ☑ Evaluate GR00T history-frame training with temporal camera context: joint-space 201-episode 20k-step checkpoint reached 35% SR, so joint-space was reverted to single-frame video ([history-frame summary](scripts/benchmarks/gr00t/franka/history_frame_summary.md)).
 - ☐ Add DAgger evaluation to reduce closed-loop drift and collect correction data.
 
 ## Main Links
