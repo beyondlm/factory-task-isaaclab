@@ -52,6 +52,19 @@ evaluation.
 GR00T baseline:
 [NVIDIA Isaac-GR00T N1.7 release](https://github.com/NVIDIA/Isaac-GR00T/tree/n1.7-release)
 
+## Franka GR00T Action Horizon
+
+The Franka GR00T modality configs use a runtime action horizon:
+
+```bash
+export ACTION_HORIZON=32
+export FRANKA_GROOT_ACTION_HORIZON=$ACTION_HORIZON
+```
+
+The default is 32 when `FRANKA_GROOT_ACTION_HORIZON` is not set. Use the same value for dataset statistics,
+training, open-loop evaluation, and closed-loop client feedback actions. The current task-space and joint-space configs
+use the current camera frame only, with `video.delta_indices = [0]`.
+
 Current Franka sorting closed-loop benchmark:
 
 The 10k rows use 105 episodes; the 20k rows use 201 episodes.
@@ -63,6 +76,7 @@ The 10k rows use 105 episodes; the 20k rows use 201 episodes.
 | Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
 | Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
 | Joint space + video history | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) with archived `video.delta_indices = [-16, 0]` | `franka_joint_pos`, `franka_gripper_width`; current-state only, two video frames | 201 episodes | 20k steps | 256 | 35% | 20 trials. History-frame video hurt joint-space closed-loop SR, likely because historical robot images conflicted with current-only joint state. |
+| Joint space + action horizon 32 | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps | 256 | 65% | 20 trials, 13 successes / 7 failures:<br />1: grasp hesitation above the box, then after placing the first box the pose for reaching the second box becomes abnormal, 6 times.<br />2: perception failure, gripper closes above the box, 1 time. |
 
 For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the robot executes absolute EEF poses. It means GR00T should learn the recorded IK-relative delta vector directly as a normal continuous action, while IsaacLab's IK-relative controller applies that delta during rollout.
 
@@ -70,6 +84,7 @@ For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the ro
 
 - ☑ Add another 100 Franka sorting episodes with broader box pose and task-progress coverage.
 - ☑ Evaluate GR00T history-frame training with temporal camera context: joint-space 201-episode 20k-step checkpoint reached 35% SR, so joint-space was reverted to single-frame video ([history-frame summary](scripts/benchmarks/gr00t/franka/history_frame_summary.md)).
+- ☑ Set GR00T action horizon from 16 to 32 for Franka training, stats generation, open-loop evaluation, and closed-loop feedback execution ([16-to-32 action horizon summary](scripts/benchmarks/gr00t/franka/action_horizon_16_to_32.md)).
 - ☐ Add DAgger evaluation to reduce closed-loop drift and collect correction data.
 
 ## Main Links
@@ -77,6 +92,10 @@ For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the ro
 Franka benchmark details and command reference:
 
 [Franka GR00T command guide](scripts/benchmarks/gr00t/franka/franka_manipulation_gr00t_commands.md)
+
+Action chunk migration note:
+
+[Update GR00T action horizon from 16 to 32](scripts/benchmarks/gr00t/franka/action_horizon_16_to_32.md)
 
 ## Included Overlay Paths
 

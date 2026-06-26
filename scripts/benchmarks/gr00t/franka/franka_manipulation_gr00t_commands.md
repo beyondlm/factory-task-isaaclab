@@ -20,9 +20,13 @@ export DATA_ROOT=/path/to/data
 export CHECKPOINT_ROOT=/path/to/checkpoints
 export LOCAL_GROOT_WORKDIR=/path/to/local/gr00t_workdir
 export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
+export ACTION_HORIZON=32
+export FRANKA_GROOT_ACTION_HORIZON=$ACTION_HORIZON
 ```
 
 `FRANKA_SORTING_ASSET_DIR` should point to the USD asset root for the factory Franka, belt, boxes, and bins.
+`FRANKA_GROOT_ACTION_HORIZON` controls the GR00T action chunk length used by Franka modality configs, stats
+generation, training, open-loop evaluation, and closed-loop feedback actions. The default is 32 when it is not set.
 
 ## Benchmark Scope
 
@@ -61,9 +65,12 @@ The 10k rows use 105 episodes; the 20k rows use 201 episodes.
 | EEF / IK-relative | [EEF config](franka_modality_config.py) | 201 episodes | 20k steps | 256 | 100% | 20 trials: no failures. |
 | Joint space | [Joint config](franka_joint_modality_config.py) | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
 | Joint space | [Joint config](franka_joint_modality_config.py) | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
+| Joint space + action horizon 32 | [Joint config](franka_joint_modality_config.py) | 201 episodes | 20k steps | 256 | 65% | 20 trials, 13 successes / 7 failures:<br />1: grasp hesitation above the box; after placing the first box, the pose for the second box becomes abnormal, 6 times.<br />2: perception failure; gripper closes above the box, 1 time. |
 
 For new reportable numbers, rerun the closed-loop client with a fixed checkpoint, fixed seed/task setup, and
 `--num-total-experiments` set to the desired trial count.
+
+For the dynamic action-horizon setup and 16-to-32 migration, see [action_horizon_16_to_32.md](action_horizon_16_to_32.md).
 
 ## Task Setup And Success Criteria
 
@@ -602,6 +609,8 @@ cd "$GROOT"
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
 CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_eef_10000_traj0.jpeg"
+ACTION_HORIZON="${ACTION_HORIZON:-32}"
+export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -609,7 +618,7 @@ uv run python gr00t/eval/open_loop_eval.py \
   --dataset-path "$DATASET" \
   --embodiment-tag NEW_EMBODIMENT \
   --traj-ids 0 \
-  --action-horizon 16 \
+  --action-horizon "$ACTION_HORIZON" \
   --steps 400 \
   --modality-keys franka_eef_delta_pos franka_eef_delta_rot franka_gripper_cmd \
   --save-plot-path "$OUT"
@@ -627,6 +636,8 @@ cd "$GROOT"
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
 CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-20000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_20000_traj0.jpeg"
+ACTION_HORIZON="${ACTION_HORIZON:-32}"
+export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -634,7 +645,7 @@ uv run python gr00t/eval/open_loop_eval.py \
   --dataset-path "$DATASET" \
   --embodiment-tag NEW_EMBODIMENT \
   --traj-ids 0 \
-  --action-horizon 16 \
+  --action-horizon "$ACTION_HORIZON" \
   --steps 400 \
   --modality-keys franka_joint_pos franka_gripper_width \
   --save-plot-path "$OUT"
@@ -670,6 +681,8 @@ cd "$ISAACLAB"
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
 conda activate isaaclab3_beta
+ACTION_HORIZON="${ACTION_HORIZON:-32}"
+export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 ./isaaclab.sh -p scripts/benchmarks/gr00t/franka/gr00t_inference_client_franka.py \
   --policy-type task_space \
@@ -679,7 +692,7 @@ conda activate isaaclab3_beta
   --language-instruction "Pick up the labeled box and place it into the blue bin. Pick up the unlabeled box and place it into the black bin." \
   --num-total-experiments 10 \
   --max-inference-steps 62 \
-  --num-feedback-actions 16
+  --num-feedback-actions "$ACTION_HORIZON"
 ```
 
 Start GR00T server for joint-space checkpoint:
@@ -705,6 +718,8 @@ cd "$ISAACLAB"
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
 conda activate isaaclab3_beta
+ACTION_HORIZON="${ACTION_HORIZON:-32}"
+export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 ./isaaclab.sh -p scripts/benchmarks/gr00t/franka/gr00t_inference_client_franka.py \
   --policy-type joint_space \
@@ -714,7 +729,7 @@ conda activate isaaclab3_beta
   --language-instruction "Pick up the labeled box and place it into the blue bin. Pick up the unlabeled box and place it into the black bin." \
   --num-total-experiments 20 \
   --max-inference-steps 62 \
-  --num-feedback-actions 16
+  --num-feedback-actions "$ACTION_HORIZON"
 ```
 
 Add `--headless` to the client command if GUI is not needed.

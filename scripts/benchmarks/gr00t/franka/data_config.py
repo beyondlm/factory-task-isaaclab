@@ -9,12 +9,24 @@ Copy or merge this class into Isaac-GR00T's ``gr00t/experiment/data_config.py``
 and add the map entry shown at the bottom of this file.
 """
 
+import os
+
 from gr00t.data.dataset import ModalityConfig
 from gr00t.data.transform.base import ComposedModalityTransform
 from gr00t.data.transform.concat import ConcatTransform
 from gr00t.data.transform.state_action import StateActionToTensor, StateActionTransform
 from gr00t.data.transform.video import VideoColorJitter, VideoCrop, VideoResize, VideoToNumpy, VideoToTensor
 from gr00t.model.transforms import GR00TTransform
+
+
+def _positive_int_from_env(name: str, default: int) -> int:
+    value = int(os.environ.get(name, default))
+    if value < 1:
+        raise ValueError(f"{name} must be >= 1, got {value}")
+    return value
+
+
+ACTION_HORIZON = _positive_int_from_env("FRANKA_GROOT_ACTION_HORIZON", 32)
 
 
 class FrankaPickPlaceRelativeTaskSpaceDataConfig:
@@ -34,7 +46,7 @@ class FrankaPickPlaceRelativeTaskSpaceDataConfig:
     ]
     language_keys = ["annotation.human.action.task_description"]
     observation_indices = [0]
-    action_indices = list(range(16))
+    action_indices = list(range(ACTION_HORIZON))
 
     def modality_config(self):
         return {

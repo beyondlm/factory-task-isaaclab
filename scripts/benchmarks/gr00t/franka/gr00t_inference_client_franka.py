@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import os
 import traceback
 from dataclasses import dataclass
 from io import BytesIO
@@ -43,6 +44,16 @@ FRANKA_ARM_JOINT_LIMITS = np.asarray(
 )
 
 
+def _positive_int_from_env(name: str, default: int) -> int:
+    value = int(os.environ.get(name, default))
+    if value < 1:
+        raise ValueError(f"{name} must be >= 1, got {value}")
+    return value
+
+
+DEFAULT_NUM_FEEDBACK_ACTIONS = _positive_int_from_env("FRANKA_GROOT_ACTION_HORIZON", 32)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", default=DEFAULT_EEF_TASK)
@@ -59,7 +70,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--num-total-experiments", type=int, default=10)
     parser.add_argument("--max-inference-steps", type=int, default=62)
-    parser.add_argument("--num-feedback-actions", type=int, default=16)
+    parser.add_argument("--num-feedback-actions", type=int, default=DEFAULT_NUM_FEEDBACK_ACTIONS)
     parser.add_argument("--camera-names", nargs="+", default=["wrist_camera", "table_camera"])
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=11)
@@ -73,6 +84,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.policy_type == "joint_space" and args.task == DEFAULT_EEF_TASK:
         args.task = DEFAULT_JOINT_TASK
+    if args.num_feedback_actions < 1:
+        raise ValueError("--num-feedback-actions must be >= 1")
     return args
 
 
