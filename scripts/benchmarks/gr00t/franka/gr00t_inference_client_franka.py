@@ -51,7 +51,18 @@ def _positive_int_from_env(name: str, default: int) -> int:
     return value
 
 
+def _int_list_from_env(name: str, default: list[int]) -> list[int]:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return list(default)
+    values = [int(value.strip()) for value in raw_value.split(",") if value.strip()]
+    if not values:
+        raise ValueError(f"{name} must contain at least one integer index")
+    return values
+
+
 DEFAULT_NUM_FEEDBACK_ACTIONS = _positive_int_from_env("FRANKA_GROOT_ACTION_HORIZON", 32)
+DEFAULT_STATE_HISTORY_FRAMES = len(_int_list_from_env("FRANKA_GROOT_STATE_DELTA_INDICES", [0]))
 
 
 def parse_args() -> argparse.Namespace:
@@ -71,6 +82,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-total-experiments", type=int, default=10)
     parser.add_argument("--max-inference-steps", type=int, default=62)
     parser.add_argument("--num-feedback-actions", type=int, default=DEFAULT_NUM_FEEDBACK_ACTIONS)
+    parser.add_argument("--video-history-frames", type=int, default=None)
+    parser.add_argument("--state-history-frames", type=int, default=DEFAULT_STATE_HISTORY_FRAMES)
     parser.add_argument("--camera-names", nargs="+", default=["wrist_camera", "table_camera"])
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=11)
@@ -84,6 +97,12 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.policy_type == "joint_space" and args.task == DEFAULT_EEF_TASK:
         args.task = DEFAULT_JOINT_TASK
+    if args.video_history_frames is None:
+        args.video_history_frames = 1
+    if args.video_history_frames < 1:
+        raise ValueError("--video-history-frames must be >= 1")
+    if args.state_history_frames < 1:
+        raise ValueError("--state-history-frames must be >= 1")
     if args.num_feedback_actions < 1:
         raise ValueError("--num-feedback-actions must be >= 1")
     return args
@@ -201,16 +220,71 @@ def normalize_rgb(frame: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(frame)
 
 
-def camera_observation(env, camera_names: list[str]) -> dict[str, np.ndarray]:
-    videos: dict[str, np.ndarray] = {}
+def capture_camera_frames(env, camera_names: list[str]) -> dict[str, np.ndarray]:
+    frames: dict[str, np.ndarray] = {}
     for camera_name in camera_names:
         if camera_name not in env.scene.sensors:
             available = ", ".join(sorted(env.scene.sensors.keys()))
             raise KeyError(f"Camera sensor '{camera_name}' was not found. Available sensors: {available}")
         sensor = env.scene.sensors[camera_name]
         frame = sensor.data.output["rgb"].detach().cpu().numpy()[0]
-        videos[camera_name] = normalize_rgb(frame)[None, None, ...]
-    return videos
+        frames[camera_name] = normalize_rgb(frame)
+    return frames
+
+
+class CameraHistoryBuffer:
+    def __init__(self, history_frames: int):
+        self.history_frames = history_frames
+        self._history: dict[str, list[np.ndarray]] = {}
+
+    def reset(self) -> None:
+        self._history.clear()
+
+    def observation(self, env, camera_names: list[str]) -> dict[str, np.ndarray]:
+        current_frames = capture_camera_frames(env, camera_names)
+        videos: dict[str, np.ndarray] = {}
+        keep_history = max(self.history_frames - 1, 0)
+
+        for camera_name, current_frame in current_frames.items():
+            previous_frames = self._history.get(camera_name, [])
+            frames = (previous_frames + [current_frame])[-self.history_frames :]
+            if len(frames) < self.history_frames:
+                frames = [frames[0]] * (self.history_frames - len(frames)) + frames
+            videos[camera_name] = np.stack(frames, axis=0)[None, ...]
+
+            if keep_history:
+                self._history[camera_name] = (previous_frames + [current_frame])[-keep_history:]
+            else:
+                self._history[camera_name] = []
+
+        return videos
+
+
+class StateHistoryBuffer:
+    def __init__(self, history_frames: int):
+        self.history_frames = history_frames
+        self._history: list[dict[str, np.ndarray]] = []
+
+    def reset(self) -> None:
+        self._history.clear()
+
+    def append(self, state: dict[str, np.ndarray]) -> None:
+        copied_state = {key: np.asarray(value, dtype=np.float32).copy() for key, value in state.items()}
+        self._history.append(copied_state)
+        self._history = self._history[-self.history_frames :]
+
+    def observation(self) -> dict[str, np.ndarray]:
+        if not self._history:
+            raise RuntimeError("State history is empty; append the reset state before requesting an observation.")
+
+        frames = self._history[-self.history_frames :]
+        if len(frames) < self.history_frames:
+            frames = [frames[0]] * (self.history_frames - len(frames)) + frames
+
+        return {
+            key: np.stack([frame[key] for frame in frames], axis=1)
+            for key in frames[-1]
+        }
 
 
 def gripper_width_from_obs(gripper_pos: np.ndarray) -> np.ndarray:
@@ -243,42 +317,70 @@ def franka_joint_state(env) -> tuple[np.ndarray, np.ndarray]:
     return arm_joint_pos, gripper_width.astype(np.float32)
 
 
-def task_space_policy_observation(env, obs: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+def task_space_policy_state(obs: dict[str, Any]) -> dict[str, np.ndarray]:
     eef_pos = obs["policy"]["eef_pos"].detach().cpu().numpy().astype(np.float32)
     eef_quat = obs["policy"]["eef_quat"].detach().cpu().numpy().astype(np.float32)
     gripper_pos = obs["policy"]["gripper_pos"].detach().cpu().numpy().astype(np.float32)
-
     return {
-        "video": camera_observation(env, list(args.camera_names)),
-        "state": {
-            "franka_eef_pos": eef_pos[:, None, :],
-            "franka_eef_quat": eef_quat[:, None, :],
-            "franka_gripper_width": gripper_width_from_obs(gripper_pos)[:, None, :],
-        },
-        "language": {
-            "annotation.human.action.task_description": [[args.language_instruction]],
-        },
+        "franka_eef_pos": eef_pos,
+        "franka_eef_quat": eef_quat,
+        "franka_gripper_width": gripper_width_from_obs(gripper_pos),
     }
 
 
-def joint_space_policy_observation(env, args: argparse.Namespace) -> dict[str, Any]:
+def joint_space_policy_state(env) -> dict[str, np.ndarray]:
     arm_joint_pos, gripper_width = franka_joint_state(env)
     return {
-        "video": camera_observation(env, list(args.camera_names)),
-        "state": {
-            "franka_joint_pos": arm_joint_pos[:, None, :],
-            "franka_gripper_width": gripper_width[:, None, :],
-        },
+        "franka_joint_pos": arm_joint_pos,
+        "franka_gripper_width": gripper_width,
+    }
+
+
+def current_policy_state(env, obs: dict[str, Any], args: argparse.Namespace) -> dict[str, np.ndarray]:
+    if args.policy_type == "joint_space":
+        return joint_space_policy_state(env)
+    return task_space_policy_state(obs)
+
+
+def task_space_policy_observation(
+    env,
+    args: argparse.Namespace,
+    camera_history: CameraHistoryBuffer,
+    state_history: StateHistoryBuffer,
+) -> dict[str, Any]:
+    return {
+        "video": camera_history.observation(env, list(args.camera_names)),
+        "state": state_history.observation(),
         "language": {
             "annotation.human.action.task_description": [[args.language_instruction]],
         },
     }
 
 
-def policy_observation(env, obs: dict[str, Any], args: argparse.Namespace) -> dict[str, Any]:
+def joint_space_policy_observation(
+    env,
+    args: argparse.Namespace,
+    camera_history: CameraHistoryBuffer,
+    state_history: StateHistoryBuffer,
+) -> dict[str, Any]:
+    return {
+        "video": camera_history.observation(env, list(args.camera_names)),
+        "state": state_history.observation(),
+        "language": {
+            "annotation.human.action.task_description": [[args.language_instruction]],
+        },
+    }
+
+
+def policy_observation(
+    env,
+    args: argparse.Namespace,
+    camera_history: CameraHistoryBuffer,
+    state_history: StateHistoryBuffer,
+) -> dict[str, Any]:
     if args.policy_type == "joint_space":
-        return joint_space_policy_observation(env, args)
-    return task_space_policy_observation(env, obs, args)
+        return joint_space_policy_observation(env, args, camera_history, state_history)
+    return task_space_policy_observation(env, args, camera_history, state_history)
 
 
 def action_value(action_dict: dict[str, np.ndarray], key: str) -> np.ndarray:
@@ -368,12 +470,17 @@ def run_closed_loop(args: argparse.Namespace) -> None:
     print(f"Connected to GR00T server at {args.server_host}:{args.server_port}")
 
     env, success_term = make_env(args)
+    camera_history = CameraHistoryBuffer(args.video_history_frames)
+    state_history = StateHistoryBuffer(args.state_history_frames)
     successful_experiments = 0
 
     with contextlib.suppress(KeyboardInterrupt), torch.inference_mode():
         for exp_idx in range(args.num_total_experiments):
             print(f"\nStarting experiment {exp_idx + 1}/{args.num_total_experiments}")
             obs, _ = env.reset()
+            camera_history.reset()
+            state_history.reset()
+            state_history.append(current_policy_state(env, obs, args))
             for _ in range(getattr(env.unwrapped.cfg, "num_rerenders_on_reset", 0)):
                 env.sim.render()
 
@@ -381,10 +488,18 @@ def run_closed_loop(args: argparse.Namespace) -> None:
             frame_count = 0
 
             for inference_idx in range(args.max_inference_steps):
-                observation = policy_observation(env, obs, args)
+                observation = policy_observation(env, args, camera_history, state_history)
                 action_dict, _ = client.get_action(observation)
                 if args.debug:
                     print(f"[DEBUG] action_keys={sorted(action_dict.keys())}")
+                    print(
+                        "[DEBUG] video_shapes="
+                        f"{ {key: tuple(value.shape) for key, value in observation['video'].items()} }"
+                    )
+                    print(
+                        "[DEBUG] state_shapes="
+                        f"{ {key: tuple(value.shape) for key, value in observation['state'].items()} }"
+                    )
                 action_chunk = parse_franka_action(action_dict, args).to(device=env.device)
 
                 if args.debug:
@@ -395,6 +510,7 @@ def run_closed_loop(args: argparse.Namespace) -> None:
 
                 for action in action_chunk:
                     obs, _, _, _, _ = env.step(action.reshape(1, -1))
+                    state_history.append(current_policy_state(env, obs, args))
                     frame_count += 1
 
                     if success_term is not None and bool(success_term.func(env, **success_term.params)[0]):

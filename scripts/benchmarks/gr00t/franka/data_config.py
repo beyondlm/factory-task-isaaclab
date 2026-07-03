@@ -26,7 +26,18 @@ def _positive_int_from_env(name: str, default: int) -> int:
     return value
 
 
+def _int_list_from_env(name: str, default: list[int]) -> list[int]:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return list(default)
+    values = [int(value.strip()) for value in raw_value.split(",") if value.strip()]
+    if not values:
+        raise ValueError(f"{name} must contain at least one integer index")
+    return values
+
+
 ACTION_HORIZON = _positive_int_from_env("FRANKA_GROOT_ACTION_HORIZON", 32)
+STATE_DELTA_INDICES = _int_list_from_env("FRANKA_GROOT_STATE_DELTA_INDICES", [0])
 
 
 class FrankaPickPlaceRelativeTaskSpaceDataConfig:
@@ -46,12 +57,13 @@ class FrankaPickPlaceRelativeTaskSpaceDataConfig:
     ]
     language_keys = ["annotation.human.action.task_description"]
     observation_indices = [0]
+    state_indices = STATE_DELTA_INDICES
     action_indices = list(range(ACTION_HORIZON))
 
     def modality_config(self):
         return {
             "video": ModalityConfig(delta_indices=self.observation_indices, modality_keys=self.video_keys),
-            "state": ModalityConfig(delta_indices=self.observation_indices, modality_keys=self.state_keys),
+            "state": ModalityConfig(delta_indices=self.state_indices, modality_keys=self.state_keys),
             "action": ModalityConfig(delta_indices=self.action_indices, modality_keys=self.action_keys),
             "language": ModalityConfig(delta_indices=self.observation_indices, modality_keys=self.language_keys),
         }
@@ -95,7 +107,7 @@ class FrankaPickPlaceRelativeTaskSpaceDataConfig:
                 action_concat_order=self.action_keys,
             ),
             GR00TTransform(
-                state_horizon=len(self.observation_indices),
+                state_horizon=len(self.state_indices),
                 action_horizon=len(self.action_indices),
                 max_state_dim=64,
                 max_action_dim=32,

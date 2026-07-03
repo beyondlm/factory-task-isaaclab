@@ -25,8 +25,6 @@ export FRANKA_GROOT_ACTION_HORIZON=$ACTION_HORIZON
 ```
 
 `FRANKA_SORTING_ASSET_DIR` should point to the USD asset root for the factory Franka, belt, boxes, and bins.
-`FRANKA_GROOT_ACTION_HORIZON` controls the GR00T action chunk length used by Franka modality configs, stats
-generation, training, open-loop evaluation, and closed-loop feedback actions. The default is 32 when it is not set.
 
 ## Benchmark Scope
 
@@ -55,7 +53,7 @@ object_a = box_3_label -> blue bin  = sorting_bin_blue
 object_b = box_4_no    -> black bin = black_sorting_bin
 ```
 
-Current closed-loop benchmark summary:
+Historical closed-loop benchmark summary for the previous 16-step action horizon:
 
 The 10k rows use 105 episodes; the 20k rows use 201 episodes.
 
@@ -70,7 +68,7 @@ The 10k rows use 105 episodes; the 20k rows use 201 episodes.
 For new reportable numbers, rerun the closed-loop client with a fixed checkpoint, fixed seed/task setup, and
 `--num-total-experiments` set to the desired trial count.
 
-For the dynamic action-horizon setup and 16-to-32 migration, see [action_horizon_16_to_32.md](action_horizon_16_to_32.md).
+For the 16-to-32 action-horizon migration, see [action_horizon_16_to_32.md](action_horizon_16_to_32.md).
 
 ## Task Setup And Success Criteria
 
@@ -461,7 +459,7 @@ NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 uv run python gr00t/experiment
   --embodiment-tag NEW_EMBODIMENT \
   --modality-config-path "$CONFIG" \
   --num-gpus 1 \
-  --output-dir "$CHECKPOINT_ROOT/franka_gr00t_bs256_20000" \
+  --output-dir "$CHECKPOINT_ROOT/franka_gr00t_h${ACTION_HORIZON}_bs256_20000" \
   --save-total-limit 3 \
   --save-steps 5000 \
   --max-steps 20000 \
@@ -535,7 +533,7 @@ uv run python gr00t/experiment/launch_finetune.py \
   --embodiment-tag NEW_EMBODIMENT \
   --modality-config-path "$CONFIG" \
   --num-gpus 1 \
-  --output-dir "$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000" \
+  --output-dir "$CHECKPOINT_ROOT/franka_joint_gr00t_h${ACTION_HORIZON}_bs256_20000" \
   --save-total-limit 3 \
   --save-steps 5000 \
   --max-steps 20000 \
@@ -547,8 +545,8 @@ uv run python gr00t/experiment/launch_finetune.py \
 True resume from checkpoint 10000 to 20000:
 
 ```bash
-SRC="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-10000"
-OUT="$CHECKPOINT_ROOT/franka_joint_gr00t_resume_10000_to_20000"
+SRC="$CHECKPOINT_ROOT/franka_joint_gr00t_h${ACTION_HORIZON}_bs256_20000/checkpoint-10000"
+OUT="$CHECKPOINT_ROOT/franka_joint_gr00t_h${ACTION_HORIZON}_resume_10000_to_20000"
 
 mkdir -p "$OUT"
 cp -al "$SRC" "$OUT/checkpoint-10000"
@@ -607,10 +605,8 @@ Task-space checkpoint:
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_task_space"
-CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_h${ACTION_HORIZON}_bs256_20000/checkpoint-10000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_eef_10000_traj0.jpeg"
-ACTION_HORIZON="${ACTION_HORIZON:-32}"
-export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -634,10 +630,8 @@ Joint-space checkpoint:
 cd "$GROOT"
 
 DATASET="$ISAACLAB/datasets/dataset_sorting_105/lerobot_joint_space"
-CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-20000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_h${ACTION_HORIZON}_bs256_20000/checkpoint-20000"
 OUT="$LOCAL_GROOT_WORKDIR/open_loop_franka_joint_20000_traj0.jpeg"
-ACTION_HORIZON="${ACTION_HORIZON:-32}"
-export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/open_loop_eval.py \
@@ -663,7 +657,7 @@ Start GR00T server for task-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$CHECKPOINT_ROOT/franka_gr00t_bs256_20000/checkpoint-10000"
+CKPT="$CHECKPOINT_ROOT/franka_gr00t_h${ACTION_HORIZON}_bs256_20000/checkpoint-10000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -681,8 +675,6 @@ cd "$ISAACLAB"
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
 conda activate isaaclab3_beta
-ACTION_HORIZON="${ACTION_HORIZON:-32}"
-export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 ./isaaclab.sh -p scripts/benchmarks/gr00t/franka/gr00t_inference_client_franka.py \
   --policy-type task_space \
@@ -700,7 +692,7 @@ Start GR00T server for joint-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_bs256_20000/checkpoint-20000"
+CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_h${ACTION_HORIZON}_bs256_20000/checkpoint-20000"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -718,8 +710,6 @@ cd "$ISAACLAB"
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
 conda activate isaaclab3_beta
-ACTION_HORIZON="${ACTION_HORIZON:-32}"
-export FRANKA_GROOT_ACTION_HORIZON="$ACTION_HORIZON"
 
 ./isaaclab.sh -p scripts/benchmarks/gr00t/franka/gr00t_inference_client_franka.py \
   --policy-type joint_space \

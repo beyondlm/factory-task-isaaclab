@@ -19,8 +19,18 @@ def _positive_int_from_env(name: str, default: int) -> int:
     return value
 
 
+def _int_list_from_env(name: str, default: list[int]) -> list[int]:
+    raw_value = os.environ.get(name)
+    if raw_value is None:
+        return list(default)
+    values = [int(value.strip()) for value in raw_value.split(",") if value.strip()]
+    if not values:
+        raise ValueError(f"{name} must contain at least one integer index")
+    return values
+
+
 VIDEO_DELTA_INDICES = [0]
-STATE_DELTA_INDICES = [0]
+STATE_DELTA_INDICES = _int_list_from_env("FRANKA_GROOT_STATE_DELTA_INDICES", [0])
 ACTION_HORIZON = _positive_int_from_env("FRANKA_GROOT_ACTION_HORIZON", 32)
 ACTION_DELTA_INDICES = list(range(ACTION_HORIZON))
 
@@ -66,7 +76,7 @@ franka_config = {
         ],
     ),
     "language": ModalityConfig(
-        delta_indices=STATE_DELTA_INDICES,
+        delta_indices=[0],
         modality_keys=["annotation.human.action.task_description"],
     ),
 }
