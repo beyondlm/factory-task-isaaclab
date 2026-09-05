@@ -20,6 +20,7 @@ export DATA_ROOT=/path/to/data
 export CHECKPOINT_ROOT=/path/to/checkpoints
 export LOCAL_GROOT_WORKDIR=/path/to/local/gr00t_workdir
 export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
+export JOINT_H32_BASELINE_CKPT=/path/to/joint_h32_baseline/checkpoint-20000
 export ACTION_HORIZON=32
 export FRANKA_GROOT_ACTION_HORIZON=$ACTION_HORIZON
 ```
@@ -57,13 +58,15 @@ Historical closed-loop benchmark summary for the previous 16-step action horizon
 
 The 10k rows use 105 episodes; the 20k rows use 201 episodes.
 
-| Policy action space | GR00T N1.7 modality config | Training dataset | Training setup | Batch size | Closed-loop SR | Failure notes |
-| --- | --- | --- | --- | --- | --- | --- |
-| EEF / IK-relative | [EEF config](franka_modality_config.py) | 105 episodes | 10k steps | 256 | 65% | 20 trials:<br />1: OOD pick failure, 7 times. |
-| EEF / IK-relative | [EEF config](franka_modality_config.py) | 201 episodes | 20k steps | 256 | 100% | 20 trials: no failures. |
-| Joint space | [Joint config](franka_joint_modality_config.py) | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
-| Joint space | [Joint config](franka_joint_modality_config.py) | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
-| Joint space + action horizon 32 | [Joint config](franka_joint_modality_config.py) | 201 episodes | 20k steps | 256 | 65% | 20 trials, 13 successes / 7 failures:<br />1: grasp hesitation above the box; after placing the first box, the pose for the second box becomes abnormal, 6 times.<br />2: perception failure; gripper closes above the box, 1 time. |
+
+| Policy action space             | GR00T N1.7 modality config                      | Training dataset | Training setup | Batch size | Closed-loop SR | Failure notes                                                                                                                                                                                                             |
+| ------------------------------- | ----------------------------------------------- | ---------------- | -------------- | ---------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| EEF / IK-relative               | [EEF config](franka_modality_config.py)         | 105 episodes     | 10k steps      | 256        | 65%            | 20 trials: 1: OOD pick failure, 7 times.                                                                                                                                                                                  |
+| EEF / IK-relative               | [EEF config](franka_modality_config.py)         | 201 episodes     | 20k steps      | 256        | 100%           | 20 trials: no failures.                                                                                                                                                                                                   |
+| Joint space                     | [Joint config](franka_joint_modality_config.py) | 105 episodes     | 10k steps      | 256        | 30%            | 20 trials: 1: mixed pick/place/OOD failures, 14 times.                                                                                                                                                                    |
+| Joint space                     | [Joint config](franka_joint_modality_config.py) | 201 episodes     | 20k steps      | 256        | 50%            | 20 trials: 1: OOD, 3 times. 2: near box, but no gripper close, 7 times.                                                                                                                                                   |
+| Joint space + action horizon 32 | [Joint config](franka_joint_modality_config.py) | 201 episodes     | 20k steps      | 256        | 65%            | 20 trials, 13 successes / 7 failures: 1: grasp hesitation above the box; after placing the first box, the pose for the second box becomes abnormal, 6 times. 2: perception failure; gripper closes above the box, 1 time. |
+
 
 For new reportable numbers, rerun the closed-loop client with a fixed checkpoint, fixed seed/task setup, and
 `--num-total-experiments` set to the desired trial count.
@@ -86,7 +89,7 @@ Scene and control details:
 - Belt/table scene scale is controlled by `SORTING_SCENE_SCALE` and `SORTING_BELT_SCALE`.
 - Proxy belt/table colliders are sized from the same scene scale.
 - `table_camera` position derives from `_belt_scaled_pos(FRANKA_TABLE_CAM_LOCAL_POS)`, so changing
-  `SORTING_BELT_SCALE` moves the camera consistently.
+`SORTING_BELT_SCALE` moves the camera consistently.
 - Replay cameras use `CameraCfg.OffsetCfg(..., convention="opengl")`.
 - Wrist camera quaternion is stored in IsaacLab `CameraCfg` order: `(x, y, z, w)`.
 - Viewport camera starts closer to the Franka/bin workspace.
@@ -116,6 +119,8 @@ Relevant function:
 both_boxes_placed_a_into_c_b_into_d(...)
 ```
 
+
+
 ## Required Local Setup
 
 Install the teleoperation submodule before running `teleop_se3_agent.py`:
@@ -138,6 +143,8 @@ Useful conda envs:
 isaaclab3_beta  -> IsaacLab replay, recording, conversion smoke tests
 lerobot_v040    -> LeRobot v0.4.0 target environment for later GR00T/LeRobot work
 ```
+
+
 
 ## LeRobot V2 Setup
 
@@ -236,6 +243,8 @@ FRANKA_IK_ACTION_SCALE=1.0 \
   --viz kit
 ```
 
+
+
 ## Demo Recording
 
 Run from the IsaacLab root:
@@ -317,6 +326,8 @@ python scripts/benchmarks/gr00t/franka/convert_hdf5_to_lerobot_task_space.py \
   --overwrite
 ```
 
+
+
 ## Teleop HDF5 To LeRobot Representations
 
 The Franka demos are collected with `Isaac-Pick-Place-Franka-IK-Rel-v0`, so the original teleop command in the HDF5 is EEF/task-space relative:
@@ -380,6 +391,8 @@ videos/chunk-000/observation.images.wrist_camera/episode_000000.mp4
 videos/chunk-000/observation.images.table_camera/episode_000000.mp4
 ```
 
+
+
 ## Dataset Statistics
 
 GR00T has two different statistics locations:
@@ -430,6 +443,8 @@ Verify:
 ls -lh "$DATASET/meta/stats.json" "$DATASET/meta/relative_stats.json"
 ```
 
+
+
 ## GR00T Training Reference
 
 Task-space dataset sanity check:
@@ -478,6 +493,8 @@ Notes:
 "franka_pick_place_relative_task_space": FrankaPickPlaceRelativeTaskSpaceDataConfig(),
 ```
 
+
+
 ## Joint-Space Conversion
 
 Convert the same HDF5 plus replay videos to joint-space GR00T-LeRobot v2:
@@ -511,6 +528,8 @@ videos: 210
 fps: 30
 robot_type: franka_pick_place_joint_space
 ```
+
+
 
 ## Joint-Space Training
 
@@ -622,7 +641,7 @@ uv run python gr00t/eval/open_loop_eval.py \
 
 The 5k-step EEF/task-space GR00T N1.7 checkpoint tracks the IK-relative delta trajectory in open-loop evaluation:
 
-![Franka EEF/task-space open-loop trajectory](../../../../docs/source/_static/how-to/franka_eef_open_loop_5000_traj0.jpeg)
+Franka EEF/task-space open-loop trajectory
 
 Joint-space checkpoint:
 
@@ -648,7 +667,7 @@ uv run python gr00t/eval/open_loop_eval.py \
 The 20k-step joint-space GR00T N1.7 checkpoint tracks the held-out demonstration trajectory closely in open-loop
 evaluation:
 
-![Franka joint-space open-loop trajectory](../../../../docs/source/_static/how-to/franka_joint_open_loop_20000_traj0.jpeg)
+Franka joint-space open-loop trajectory
 
 ## Closed-Loop Evaluation
 
@@ -692,7 +711,11 @@ Start GR00T server for joint-space checkpoint:
 ```bash
 cd "$GROOT"
 
-CKPT="$CHECKPOINT_ROOT/franka_joint_gr00t_h${ACTION_HORIZON}_bs256_20000/checkpoint-20000"
+export CKPT="$JOINT_H32_BASELINE_CKPT"
+
+test -f "$CKPT/config.json"
+test -f "$CKPT/processor_config.json"
+test -f "$CKPT/model.safetensors.index.json"
 
 NO_ALBUMENTATIONS_UPDATE=1 CUDA_VISIBLE_DEVICES=0 \
 uv run python gr00t/eval/run_gr00t_server.py \
@@ -750,13 +773,25 @@ franka_gripper_width
 If debug output shows EEF action keys, the GR00T server is using the wrong checkpoint. The joint-space client sends
 decoded GR00T joint targets directly to the IsaacLab joint-position action term.
 
+## Human-Gated DAgger
+
+The reusable DAgger workflow is maintained as a separate system guide so collection, conversion, normalization,
+training, and evaluation use one authoritative recipe:
+
+- [VLA DAgger customer guide](../../../../docs/vla_dagger_guide.md)
+- [VLA DAgger system reference](../../../../docs/vla_dagger_reference.md)
+- [Codex VLA DAgger Skill](../../../../.agents/skills/vla-dagger/SKILL.md)
+
+The guide keeps customer paths and dataset identifiers parameterized. It also explains which parts of the Franka
+implementation are reusable contracts and which must be replaced for another robot or task.
+
 ## Troubleshooting
 
 - `ModuleNotFoundError: No module named 'isaaclab_teleop'` means the teleop extension is not installed in the active
-  conda environment. Run `./isaaclab.sh -i teleop`.
+conda environment. Run `./isaaclab.sh -i teleop`.
 - `module 'omni' has no attribute 'appwindow'` happens when keyboard teleoperation is launched without Kit GUI
-  support. Add `--viz kit`.
+support. Add `--viz kit`.
 - Long waits such as `Waiting for RtPso async group async compilation` are RTX shader compilation during Kit startup,
-  especially when cameras/rendering are enabled.
+especially when cameras/rendering are enabled.
 - HDF5 replay/conversion fails on truncated files. A canceled recording may leave a partial HDF5, so prefer a
-  completed dataset file for replay and conversion.
+completed dataset file for replay and conversion.

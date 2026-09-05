@@ -1,3 +1,8 @@
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Copyright (c) 2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
@@ -35,7 +40,6 @@ import h5py
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 
@@ -75,11 +79,14 @@ class Config:
     overwrite: bool = False
     require_videos: bool = False
     only_success: bool = True
+    binary_gripper_command_target: bool = False
+    gripper_close_width: float = 0.0
+    gripper_open_width: float = 0.08
 
     data_path: str = "data/chunk-{episode_chunk:03d}/episode_{episode_index:06d}.parquet"
     video_path: str = "videos/chunk-{episode_chunk:03d}/{video_key}/episode_{episode_index:06d}.mp4"
 
-    def resolve(self) -> "Config":
+    def resolve(self) -> Config:
         self.hdf5_file_path = self.hdf5_file_path.expanduser().resolve()
         if self.lerobot_data_dir is None:
             self.lerobot_data_dir = self.hdf5_file_path.with_suffix("") / "lerobot_joint_space"
@@ -106,6 +113,16 @@ def parse_args() -> Config:
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--require-videos", action="store_true")
     parser.add_argument("--include-failed", action="store_true", help="Include HDF5 demos with success=False.")
+    parser.add_argument(
+        "--binary-gripper-command-target",
+        action="store_true",
+        help=(
+            "Keep the arm target as next achieved joint state, but replace action.gripper_width "
+            "with the recorded binary gripper command mapped to physical width."
+        ),
+    )
+    parser.add_argument("--gripper-close-width", type=float, default=Config.gripper_close_width)
+    parser.add_argument("--gripper-open-width", type=float, default=Config.gripper_open_width)
     args = parser.parse_args()
     return Config(
         hdf5_file_path=args.hdf5_file_path,
@@ -121,6 +138,9 @@ def parse_args() -> Config:
         overwrite=args.overwrite,
         require_videos=args.require_videos,
         only_success=not args.include_failed,
+        binary_gripper_command_target=args.binary_gripper_command_target,
+        gripper_close_width=args.gripper_close_width,
+        gripper_open_width=args.gripper_open_width,
     ).resolve()
 
 
@@ -166,6 +186,30 @@ def franka_joint_vector(joint_position: np.ndarray) -> np.ndarray:
     return np.concatenate([arm_joint_pos, gripper_width], axis=1).astype(np.float32)
 
 
+def binary_gripper_command_to_width(
+    command: np.ndarray,
+    *,
+    close_width: float = 0.0,
+    open_width: float = 0.08,
+) -> np.ndarray:
+    """Map recorded Franka gripper commands (-1 close, +1 open) to width targets."""
+    command = np.asarray(command, dtype=np.float32)
+    if not np.isfinite(command).all():
+        raise ValueError("Gripper command contains non-finite values")
+    if not np.isfinite([close_width, open_width]).all() or close_width >= open_width:
+        raise ValueError(
+            f"Expected finite gripper widths with close < open, got close={close_width}, open={open_width}"
+        )
+
+    is_close = np.isclose(command, -1.0, atol=1e-5)
+    is_open = np.isclose(command, 1.0, atol=1e-5)
+    invalid = ~(is_close | is_open)
+    if invalid.any():
+        values = np.unique(command[invalid])[:10]
+        raise ValueError(f"Expected binary gripper commands in {{-1, +1}}, got {values.tolist()}")
+    return np.where(is_open, open_width, close_width).astype(np.float32)
+
+
 def convert_trajectory_to_df(
     trajectory: h5py.Group,
     episode_index: int,
@@ -180,7 +224,21 @@ def convert_trajectory_to_df(
         raise ValueError(f"Episode {episode_index} is too short: {length + 1} samples")
 
     state = joint_vector[:-1]
-    action = joint_vector[1:]
+    action = joint_vector[1:].copy()
+    if config.binary_gripper_command_target:
+        recorded_action = trajectory["actions"][()].astype(np.float32)
+        if recorded_action.ndim != 2 or recorded_action.shape[0] != len(joint_vector):
+            raise ValueError(
+                "Expected recorded actions aligned one-to-one with joint states, got "
+                f"actions={recorded_action.shape}, joint_states={joint_vector.shape}"
+            )
+        # recorded_action[t] is applied at state[t] and produces the next achieved
+        # state used by action[t]. The final command has no state[t + 1] target.
+        action[:, -1] = binary_gripper_command_to_width(
+            recorded_action[:-1, -1],
+            close_width=config.gripper_close_width,
+            open_width=config.gripper_open_width,
+        )
     if state.shape[1] != 8 or action.shape[1] != 8:
         raise ValueError(f"Expected Franka joint-space dim 8, got state {state.shape}, action {action.shape}")
 

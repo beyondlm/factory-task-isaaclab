@@ -1,0 +1,4 @@
+interface:
+  display_name: "VLA DAgger"
+  short_description: "Adapt and validate human-gated DAgger for VLA tasks"
+  default_prompt: "Use $vla-dagger to adapt this IsaacLab VLA task into a validated human-gated DAgger workflow."

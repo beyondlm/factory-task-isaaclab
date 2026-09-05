@@ -1,3 +1,8 @@
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 # Copyright (c) 2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
@@ -25,7 +30,6 @@ import torch
 
 from isaaclab.app import AppLauncher
 
-
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--num_envs", type=int, default=1, help="Only 1 is supported for deterministic video output.")
 parser.add_argument(
@@ -52,7 +56,9 @@ parser.add_argument(
     type=str,
     nargs="+",
     default=["wrist_camera", "table_camera"],
-    help="Camera sensors or aliases. Supported aliases: wrist, wrist_cam, wrist_camera, table, table_cam, table_camera.",
+    help=(
+        "Camera sensors or aliases. Supported aliases: wrist, wrist_cam, wrist_camera, table, table_cam, table_camera."
+    ),
 )
 parser.add_argument("--video", action="store_true", default=False, help="Write MP4 videos during replay.")
 parser.add_argument(
@@ -95,8 +101,8 @@ import gymnasium as gym  # noqa: E402
 from isaaclab.utils.datasets import HDF5DatasetFileHandler  # noqa: E402
 
 import isaaclab_tasks  # noqa: F401, E402
+import isaaclab_tasks.manager_based.manipulation.pick_and_place.config.franka  # noqa: F401, E402
 from isaaclab_tasks.utils.parse_cfg import parse_env_cfg  # noqa: E402
-
 
 CAMERA_ALIASES = {
     "wrist": ("wrist_camera", "wrist_camera"),
@@ -281,7 +287,9 @@ def main() -> None:
             is_success = bool(success_term.func(env, **success_term.params)[0])
             if is_success:
                 successful_episode_count += 1
-                print(f"Successfully replayed {successful_episode_count} episodes out of {replayed_episode_count} demos.")
+                print(
+                    f"Successfully replayed {successful_episode_count} episodes out of {replayed_episode_count} demos."
+                )
             else:
                 failed_demo_ids.append(episode_index)
                 print(f"Replay failed success check for episode {episode_index}.")

@@ -1,11 +1,9 @@
 # Factory Task IsaacLab Overlay
 
-This repo is intended for IsaacLab factory-task development and GR00T N-series policy evaluation. It provides task
-overlays, LeRobot conversion utilities, and both open-loop and closed-loop evaluation workflows for GR00T N.x models.
+This IsaacLab 3 Beta overlay provides factory manipulation tasks and reusable GR00T N-series workflows for data
+recording, LeRobot conversion, supervised fine-tuning, human-gated DAgger, and closed-loop evaluation.
 
-Current validated GR00T version: **GR00T N1.7**.
-
-This repository is an IsaacLab 3 Beta overlay focused on factory robot learning scenarios.
+Current validated stack: **IsaacLab 3 Beta + GR00T N1.7**.
 
 Install IsaacLab 3 Beta first:
 [IsaacLab v3.0.0-beta](https://github.com/isaac-sim/IsaacLab/tree/v3.0.0-beta)
@@ -33,30 +31,21 @@ export FRANKA_SORTING_ASSET_DIR=/path/to/franka_sorting_assets
 
 The asset directory should contain the factory Franka, belt, box, and bin USD files referenced by the Franka task config.
 
-viewport for visualization
+Viewport:
 
 ![Viewport for visualization](docs/source/_static/how-to/penetrate.gif)
 
-training viewport : table(static) and wrist
+Training camera views:
 
 ![Training viewport: table(static) and wrist](docs/source/_static/how-to/head-wrist.gif)
 
-## Focus
+## Scope
 
-This repo targets factory-style manipulation workflows:
+The reference task is Franka two-object box sorting with wrist and table cameras. The repository supports EEF/IK-relative
+and joint-space policies, aligned demonstration replay, open/closed-loop evaluation, and a complete human-gated DAgger
+workflow. Additional factory tasks can reuse the same task and data contracts.
 
-- pick-and-place
-- bin sorting
-- object transfer
-- gripper-based manipulation
-- closed-loop policy evaluation
-- dexterous-hand factory tasks to be added later
-
-The first implemented task family is Franka box sorting with GR00T N1.7/LeRobot data conversion and closed-loop
-evaluation.
-
-GR00T baseline:
-[NVIDIA Isaac-GR00T N1.7 release](https://github.com/NVIDIA/Isaac-GR00T/tree/n1.7-release)
+GR00T baseline: [NVIDIA Isaac-GR00T N1.7 release](https://github.com/NVIDIA/Isaac-GR00T/tree/n1.7-release).
 
 ## Franka GR00T Action Horizon
 
@@ -71,67 +60,44 @@ The default is 32 when `FRANKA_GROOT_ACTION_HORIZON` is not set. Use the same va
 training, open-loop evaluation, and closed-loop client feedback actions. The current task-space and joint-space configs
 use the current camera frame only, with `video.delta_indices = [0]`.
 
-## Franka GR00T State History
+## EEF and joint-space policies
 
-The current joint-space state-history experiment keeps the camera input current-only and adds short robot-state history:
+Both policy spaces remain supported. Choose one representation and keep its semantics consistent across base data,
+DAgger data, normalization, training, and inference.
 
-```text
-video.delta_indices = [0]
-state.delta_indices = [-2, -1, 0]
-action.delta_indices = list(range(32))
-```
+| Policy space | Model action | IsaacLab execution | Main engineering consideration |
+| --- | --- | --- | --- |
+| [EEF / IK-relative](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | EEF position delta, rotation delta, gripper command | Differential IK applies the relative command | Compact task-space behavior, but depends on IK configuration and singularity handling |
+| [Joint space](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | Seven joint targets plus gripper width/target | Joint-position controller consumes decoded targets directly | Avoids online IK, but joint redundancy and wrist-pose consistency become data-quality concerns |
 
-This gives GR00T the two previous joint states plus the current joint state while keeping the action horizon at 32.
-Detailed local eval commands are tracked in the
-[state-history H32 command reference](scripts/benchmarks/gr00t/franka/state_history_h32_local_eval_commands.md).
+In the EEF modality config, GR00T `ABSOLUTE` means the recorded IK-relative delta vector is learned as the action value;
+it does not mean the robot executes an absolute world-frame EEF pose.
 
-Franka sorting closed-loop benchmark summary:
+Numerical EEF results from older protocols are intentionally omitted. They should be restored only after EEF and
+joint-space checkpoints are evaluated with the same frozen scenes, repeats, success metric, and failure review.
 
-The 10k rows use 105 episodes; the 20k rows use 201 episodes.
+## Current closed-loop reference
 
-| Policy action space | GR00T N1.7 modality config | GR00T N1.7 action representation | Training dataset | Training setup | Batch size | Closed-loop SR | Failure notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | 105 episodes | 10k steps | 256 | 65% | 20 trials:<br />1: OOD pick failure, 7 times. |
-| EEF / IK-relative | [EEF config](scripts/benchmarks/gr00t/franka/franka_modality_config.py) | `franka_eef_delta_pos`, `franka_eef_delta_rot`, `franka_gripper_cmd` as raw continuous actions | 201 episodes | 20k steps | 256 | 100% | 20 trials: no failures. |
-| Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 105 episodes | 10k steps | 256 | 30% | 20 trials:<br />1: mixed pick/place/OOD failures, 14 times. |
-| Joint space | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps | 256 | 50% | 20 trials:<br />1: OOD, 3 times.<br />2: near box, but no gripper close, 7 times. |
-| Joint space + video history | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) with archived `video.delta_indices = [-16, 0]` | `franka_joint_pos`, `franka_gripper_width`; current-state only, two video frames | 201 episodes | 20k steps | 256 | 35% | 20 trials. History-frame video hurt joint-space closed-loop SR, likely because historical robot images conflicted with current-only joint state. |
-| Joint space + action horizon 32 | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps | 256 | 65% | 20 trials, 13 successes / 7 failures:<br />1: grasp hesitation above the box, then after placing the first box the pose for reaching the second box becomes abnormal, 6 times.<br />2: perception failure, gripper closes above the box, 1 time. |
-| Joint space + action horizon 32 + state history | [Joint config](scripts/benchmarks/gr00t/franka/franka_joint_modality_config.py) | `franka_joint_pos`, `franka_gripper_width` | 201 episodes | 20k steps, action horizon 32, state history `[-2, -1, 0]` | 256 | 60% | 20 trials:<br />1: gripper hesitates above angled boxes, 3 times.<br />2: remaining failures need finer categorization. |
+The current reportable comparison uses 50 frozen scenes × 3 policy-noise repeats, common inference noise between the
+base and DAgger checkpoints, and manual review of every automatic failure. Values below are adjudicated success rates.
 
-For the EEF policy, `ABSOLUTE` in the GR00T modality config does not mean the robot executes absolute EEF poses. It means GR00T should learn the recorded IK-relative delta vector directly as a normal continuous action, while IsaacLab's IK-relative controller applies that delta during rollout.
+| Joint-space gripper representation | Inference close threshold | Base (20k) | Base + DAgger SFT (+5k) | Net DAgger change |
+| --- | ---: | ---: | ---: | ---: |
+| Continuous achieved width | `0.065 m` | 120/150 = 80.00% | 132/150 = 88.00% | **+8.00 pp** |
+| Direct binary target (`close=0`, `open=0.08`) | `0.04 m` | 123/150 = 82.00% | 120/150 = 80.00% | −2.00 pp |
 
-## Future Plan
+The result is representation-dependent: DAgger materially improved the Continuous policy, while changing to a binary
+target did not improve this task. Binary targets remain supported, but they are not a universal replacement for a
+working continuous representation. For a first DAgger iteration, preserve the evaluated base representation and
+normalizer, then measure recovery-data value as the primary variable.
 
-- ☑ Add another 100 Franka sorting episodes with broader box pose and task-progress coverage.
-- ☑ Evaluate GR00T history-frame training with temporal camera context: joint-space 201-episode 20k-step checkpoint reached 35% SR, so joint-space was reverted to single-frame video ([history-frame summary](scripts/benchmarks/gr00t/franka/history_frame_summary.md)).
-- ☑ Set GR00T action horizon from 16 to 32 for Franka training, stats generation, open-loop evaluation, and closed-loop feedback execution ([16-to-32 action horizon summary](scripts/benchmarks/gr00t/franka/action_horizon_16_to_32.md)).
-- ☑ Continue joint-space state-history experiments. The 20k-step `[-2, -1, 0]` state-history run improved SR to 60%, but still shows gripper hesitation above boxes at some object angles ([implementation and eval notes](scripts/benchmarks/gr00t/franka/state_history_h32_local_eval_commands.md)).
-- ☐ Add DAgger evaluation to reduce closed-loop drift and collect correction data.
+Detailed protocol, paired improved/regressed counts, and interpretation live in the
+[VLA DAgger system reference](docs/vla_dagger_reference.md).
 
 ## Main Links
 
-Franka benchmark details and command reference:
-
-[Franka GR00T command guide](scripts/benchmarks/gr00t/franka/franka_manipulation_gr00t_commands.md)
-
-Action chunk migration note:
-
-[Update GR00T action horizon from 16 to 32](scripts/benchmarks/gr00t/franka/action_horizon_16_to_32.md)
-
-Franka joint-space state-history H32 eval commands:
-
-[State-history H32 command reference](scripts/benchmarks/gr00t/franka/state_history_h32_local_eval_commands.md)
-
-## Included Overlay Paths
-
-```text
-docs/source/_static/how-to/penetrate.gif
-docs/source/_static/how-to/head-wrist.gif
-docs/source/_static/how-to/franka_eef_open_loop_5000_traj0.jpeg
-docs/source/_static/how-to/franka_joint_open_loop_20000_traj0.jpeg
-scripts/benchmarks/gr00t/franka/
-scripts/benchmarks/gr00t/franka/state_history_h32_local_eval_commands.md
-source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/config/franka/
-source/isaaclab_tasks/isaaclab_tasks/manager_based/manipulation/pick_and_place/mdp/
-```
+- [Franka GR00T command guide](scripts/benchmarks/gr00t/franka/franka_manipulation_gr00t_commands.md)
+- [VLA DAgger customer guide](docs/vla_dagger_guide.md)
+- [VLA DAgger system reference](docs/vla_dagger_reference.md)
+- [Codex VLA DAgger Skill](.agents/skills/vla-dagger/SKILL.md)
+- [Action-horizon 16-to-32 migration note](scripts/benchmarks/gr00t/franka/action_horizon_16_to_32.md)
