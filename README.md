@@ -83,13 +83,16 @@ base and DAgger checkpoints, and manual review of every automatic failure. Value
 
 | Joint-space gripper representation | Inference close threshold | Base (20k) | Base + DAgger SFT (+5k) | Net DAgger change |
 | --- | ---: | ---: | ---: | ---: |
-| Continuous achieved width | `0.065 m` | 120/150 = 80.00% | 132/150 = 88.00% | **+8.00 pp** |
-| Direct binary target (`close=0`, `open=0.08`) | `0.04 m` | 123/150 = 82.00% | 120/150 = 80.00% | −2.00 pp |
+| [Continuous achieved width](scripts/benchmarks/gr00t/franka/convert_hdf5_to_lerobot_joint_space.py#L179-L227) | `0.065 m` | 120/150 = 80.00% | 132/150 = 88.00% | **+8.00 pp** |
+| [Direct binary target (`close=0`, `open=0.08`)](scripts/benchmarks/gr00t/franka/convert_hdf5_to_lerobot_joint_space.py#L189-L241) | `0.04 m` | 123/150 = 82.00% | 120/150 = 80.00% | −2.00 pp |
 
 The result is representation-dependent: DAgger materially improved the Continuous policy, while changing to a binary
 target did not improve this task. Binary targets remain supported, but they are not a universal replacement for a
 working continuous representation. For a first DAgger iteration, preserve the evaluated base representation and
 normalizer, then measure recovery-data value as the primary variable.
+
+The linked converter is the source of truth: its [CLI switch](scripts/benchmarks/gr00t/franka/convert_hdf5_to_lerobot_joint_space.py#L116-L125)
+selects the representation, while the table links point to the exact target-construction code.
 
 Detailed protocol, paired improved/regressed counts, and interpretation live in the
 [VLA DAgger system reference](docs/vla_dagger_reference.md).
